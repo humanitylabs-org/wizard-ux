@@ -1,4 +1,4 @@
-// Channel emoji from a model (switch wizard/channel-model-emoji, off by default; issue 1605): a new channel whose name has
+// Channel emoji from a model (issue 1605, on for everyone; its switch wizard/channel-model-emoji was removed): a new channel whose name has
 // no emoji asks the Agent Service (POST /wizard/v1/channel-emoji) for one in the background, and is renamed once if its
 // name is still exactly as created. The shipped create step (core/chats-spaces.js createPickerSpace) and the ask
 // (core/chats-chanemoji.js chanModelEmoji) run here; only the shell around them and the network are stubbed.
@@ -14,13 +14,13 @@ const cut = (src, from, to) => { const a = src.indexOf(from); assert.ok(a >= 0, 
 const tick = () => new Promise(r => setImmediate(r));
 
 // answer: what the service says ({status, json}) or a function (body) → that; 'hang' never answers.
-async function create({ typed, switchOn = true, keywords = false, agent = 'hermes', privacy = 'standard', answer = { status: 200, json: { emoji: '🎯' } }, onStore = true, before = null } = {}) {
+async function create({ typed, agent = 'hermes', privacy = 'standard', answer = { status: 200, json: { emoji: '🎯' } }, onStore = true, before = null } = {}) {
   const calls = [], asks = [], list = [];
   let release; const gate = new Promise(r => { release = r; });
   const p = { wid: 'w1', from: 'w1', agent, name: typed, sid: '', busy: false, error: '' };
   const ctx = {
     calls, asks, list, AbortController, setTimeout, clearTimeout, JSON, String, Promise,
-    document: { documentElement: { dataset: { tweaks: ['wizard/desktop-chats', switchOn && 'wizard/channel-model-emoji', keywords && 'wizard/channel-auto-emoji'].filter(Boolean).join(' ') } } },
+    document: { documentElement: { dataset: { tweaks: 'wizard/desktop-chats' } } },
     window: { WizCore: { chatsParts: {} } },
     fetch: async (url, opts) => {
       asks.push({ url, method: opts.method, body: JSON.parse(opts.body), creds: opts.credentials });
@@ -96,22 +96,22 @@ test('1605: renamed, emoji-picked or deleted before the model answered: the owne
   assert.deepEqual(r.calls, [['create', 'Quarterly OKRs', 'hermes']]);
 });
 
-test('1605: switch off: no ask and every name stays exactly as typed (every agent kind)', async () => {
-  for (const agent of ['hermes', 'host', 'container', 'restricted']) for (const typed of ['Quarterly OKRs', 'Zzzqx', '🚀 Launch']) {
-    const r = await create({ typed, agent, switchOn: false });
+test('1605: on with no switch: a name the keyword map matches or one with its own emoji never asks', async () => {
+  for (const agent of ['hermes', 'host', 'container', 'restricted']) for (const [typed, stored] of [['🚀 Launch', '🚀 Launch'], ['Money', '💰 Money']]) {
+    const r = await create({ typed, agent });
     assert.deepEqual(r.asks, [], agent + ': ' + typed);
-    assert.deepEqual(r.calls, [['create', typed, agent]], agent + ': ' + typed);
+    assert.deepEqual(r.calls, [['create', stored, agent]], agent + ': ' + typed);
   }
 });
 
-test('1605: with the keyword map on too (#1580), only a name it can\'t match asks the model', async () => {
-  const money = await create({ typed: 'Money', keywords: true });
+test('1605: with the keyword map (#1580, on for everyone), only a name it can\'t match asks the model', async () => {
+  const money = await create({ typed: 'Money' });
   assert.deepEqual(money.asks, [], 'the keyword map already gave 💰');
   assert.deepEqual(money.calls, [['create', '💰 Money', 'hermes']]);
-  const okrs = await create({ typed: 'Quarterly OKRs', keywords: true });
+  const okrs = await create({ typed: 'Quarterly OKRs' });
   assert.deepEqual(okrs.asks.map(a => a.body.name), ['Quarterly OKRs']);
   assert.deepEqual(okrs.calls, [['create', 'Quarterly OKRs', 'hermes'], ['rename', '🎯 Quarterly OKRs', true]]);
-  // Keyword map alone (this switch off): no ask, as #1580 shipped it.
-  const zz = await create({ typed: 'Zzzqx', keywords: true, switchOn: false });
-  assert.deepEqual(zz.asks, []); assert.deepEqual(zz.calls, [['create', 'Zzzqx', 'hermes']]);
+  // A name the keyword map can't match asks too, and a 503 (no broker) keeps it as typed.
+  const zz = await create({ typed: 'Zzzqx', answer: { status: 503, json: { error: 'channel_emoji_unavailable' } } });
+  assert.deepEqual(zz.asks.map(a => a.body.name), ['Zzzqx']); assert.deepEqual(zz.calls, [['create', 'Zzzqx', 'hermes']]);
 });

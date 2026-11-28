@@ -250,7 +250,7 @@
       }
     },
     "updates": {
-      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings.",
+      "help": "WizardOS (server): installed version, up to date or not. Updates: Automatic installs at night, not mid-chat; Ask me waits for Install. Channel: For everyone gets releases testers used for 3 days; For testers gets every release at once and shows Try new features in Appearance. A ready update shows Install at the top of Settings. Inside Wizard for Mac a Wizard for Mac group follows: the Mac app's own version, up to date or not, Check for updates, a new version downloading, Update and restart once it is ready (never while recording), or Download when a release needs a new download from the website.",
       "controls": {
         "WizardOS (server) {version}": "the installed server version",
         "Updates": null,
@@ -366,33 +366,13 @@
       "where": "desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice)",
       "when": "desktop only"
     },
-    "wizard/boundary-agent-access": {
-      "help": "Connected accounts' Agent access, boundary on.",
-      "where": "Settings › Try new features › Agent access under the browser boundary"
-    },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Try new features › Side button opens the Agent chat"
     },
-    "wizard/agent-approvals": {
-      "help": "Container agents run code without an approval nobody sees (Agents: Just run, Ask me, Refuse); prompts wait an hour.",
-      "where": "Settings › Try new features › Agents run code without asking"
-    },
-    "wizard/private-ai-nudge": {
-      "help": "Installing a personal-data app suggests private AI.",
-      "where": "Settings › Try new features › Install sheet recommends private AI"
-    },
     "wizard/get-set-up": {
       "help": "Setup lists optional accounts to connect.",
       "where": "Settings › Try new features › Get set up list in Setup"
-    },
-    "wizard/private-mode": {
-      "help": "Settings › Privacy: Private mode, Privacy check.",
-      "where": "Settings › Try new features › Private mode switch-over"
-    },
-    "wizard/private-routing": {
-      "help": "Orb opens the named agent's thread; a chip moves it.",
-      "where": "Settings › Try new features › Private routing"
     },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
@@ -426,17 +406,9 @@
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
       "where": "Settings › Try new features › Buttons that tick things off in apps"
     },
-    "wizard/app-location": {
-      "help": "Only apps whose wizard.md asks for location (today Maps) may use it, after your browser's or phone's own yes; others stay blocked.",
-      "where": "Settings › Try new features › Location for Maps"
-    },
     "wizard/pin-instant-open": {
       "help": "Android: pinned app icons open at once on their last screen.",
       "where": "Settings › Try new features › Instant home-screen apps"
-    },
-    "wizard/phone-badge-look": {
-      "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
-      "where": "Settings › Try new features › One UI icon count"
     },
     "wizard/phone-recovery-mode": {
       "help": "Android: a frozen start reopens in recovery mode.",
@@ -454,24 +426,6 @@
       "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
       "where": "Settings › Try new features › Phone media player for Music and Podcasts"
     },
-    "wizard/attach-menu-icons": {
-      "help": "Android app: the + menu in a chat (and the orb's Attach) shows icons before Photo or video, Camera and File, on bigger rows.",
-      "where": "Settings › Try new features › Icons on the attach menu",
-      "when": "Android app only"
-    },
-    "wizard/share-people-box": {
-      "help": "Share's People row shows Messenger's recent chats in every window.",
-      "where": "Settings › Try new features › Share to people in any window"
-    },
-    "wizard/mac-app-updates": {
-      "help": "Wizard for Mac: About & updates gets a Wizard for Mac group: its version, up to date or not, Check for updates, Update and restart, Download.",
-      "where": "Settings › Try new features › Wizard for Mac in About & updates",
-      "when": "Wizard for Mac only"
-    },
-    "wizard/ai-apps-running": {
-      "help": "AI apps: Running view in the sidebar.",
-      "where": "Settings › Try new features › Running view in the AI apps sidebar"
-    },
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
       "where": "Settings › Try new features › Inbox: pin threads to the top"
@@ -484,14 +438,6 @@
       "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
       "where": "Settings › Try new features › Phone Apps tile: Favorites panel and quick switcher",
       "when": "phone only"
-    },
-    "wizard/channel-auto-emoji": {
-      "help": "New channels get a fitting emoji.",
-      "where": "Settings › Try new features › Channels: a fitting emoji for new channels"
-    },
-    "wizard/channel-model-emoji": {
-      "help": "New channels with no emoji get one picked by your Wizard's fast model.",
-      "where": "Settings › Try new features › Channels: an AI-picked emoji for new channels"
     },
     "wizard/app-picker-store-search": {
       "help": "Add an app's search also finds App Store apps.",
@@ -508,10 +454,6 @@
     "wizard/feature-counts-ask": {
       "help": "Shared only after you say Share.",
       "where": "Settings › Try new features › Ask before sharing feature counts"
-    },
-    "wizard/shorter-app-updates": {
-      "help": "App updates stop an app once.",
-      "where": "Settings › Try new features › Shorter app updates"
     },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
@@ -697,6 +639,7 @@
     "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
+    "Is my Mac app (Wizard for Mac) up to date?": "Inside Wizard for Mac: Settings › About & updates › Wizard for Mac shows its version and Up to date, or the new version downloading; Check for updates looks now, Update and restart installs a ready one, Download gets a release that needs a new download. Not shown in a browser or on the phone.",
     "Update now?": "When an update is ready, the card at the top of Settings shows Install (or Install now); tap it. 'Interface updated · Reload' just reloads the screen.",
     "Use Wizard on my phone?": "Settings › Phones & devices: scan the QR code with the Wizard phone app (needs Tailscale; the page walks you through it).",
     "Change the look?": "Settings › Appearance › Skin and Colors; + New skin to make your own.",
@@ -710,11 +653,16 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
+    "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
     "Stop write loops": "on for everyone, nothing to turn on: an identical save within 10 s is not resent, and over 20 saves a minute to one place pauses.",
     "Apps in Updates": "on for everyone: Settings › About & updates › Apps.",
+    "Shorter app updates": "on for everyone, nothing to turn on: an app update stops the app once, for seconds.",
+    "Wizard for Mac in About & updates": "on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
-    "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
+    "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected.",
+    "One UI icon count": "on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner."
   }
 }

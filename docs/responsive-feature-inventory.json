@@ -402,7 +402,7 @@
         "desktop"
       ],
       "classification": "shared",
-      "note": "Private routing: the orb opens the chosen agent's thread, a where-it-went chip and one-tap move (issue 1804, switch wizard/private-routing)"
+      "note": "Private routing: the orb opens the chosen agent's thread, a where-it-went chip and one-tap move (issue 1804; on for everyone, switch wizard/private-routing removed)"
     },
     "core/privacy.js": {
       "loadedBy": [
@@ -410,7 +410,7 @@
         "desktop"
       ],
       "classification": "shared",
-      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801, switch wizard/private-mode)"
+      "note": "Settings › Privacy: Private mode row, Privacy check, switch-over sheet, Why it matters (issue 1801; on for everyone, switch wizard/private-mode removed)"
     },
     "core/action-cards.js": {
       "loadedBy": [
@@ -1835,7 +1835,9 @@
     "core/phone-nav.css",
     "core/photos-relay.js",
     "core/polish.css",
+    "core/privacy.css",
     "core/privacy.js",
+    "core/private-route.css",
     "core/private-route.js",
     "core/reach.js",
     "core/resources.css",

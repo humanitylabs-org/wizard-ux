@@ -243,6 +243,12 @@
    * this run settles (its idempotency key = the outbox item id); 2 min after acceptance it releases anyway.
    * A message that truly can't be sent puts the thread back where it was (the pill keeps Retry/Edit). */
   const PEND = new Map(); // sessionId -> { key, kind, text, at, state: 'sending'|'waiting'|'sent', sentAt, runId }
+  // New chats the owner archived while this device still holds their send (wizard-ux issue 1997: Archive a chat still
+  // working, seconds after sending it). The box's list leaves an archived chat out, so this device would build its
+  // stand-in row again, unarchived, under Working until the run ended. LIVE._archivedNew keeps the mark while the send
+  // is held; addSynthetic reads it (a stand-in is only built while the send is held), and a Restore or the next mark
+  // ends it.
+  const ARCHIVED_NEW = new Set();
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
   // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
@@ -390,12 +396,22 @@
       const i = list.findIndex(s => s.id === sid);
       if (i >= 0 && !list[i].hidden) continue; // listed and shown: nothing to do
       // A stale list read that leaves it out again (the box un-hides it a moment later): the row shown before goes back in.
-      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid);
+      const s = i >= 0 ? list[i] : SHOWN.get(sid) || DETAIL.get(sid) || fromRecord(sid, agent);
       if (!s || !(s.hidden || s.sendShown) || (i < 0 && (L.ownerOf(s) || '') !== agent)) continue;
       s.hidden = false; s.sendShown = true; SHOWN.set(sid, s);
       if (i < 0) list.unshift(s);
       applyPend(s);
     }
+  }
+  /* Replied before the hidden thread loaded (wizard-ux issue 2017): no list row and no detail row yet, only the Inbox
+   * record he tapped (thread id, title, agent, time). That record is the row the hold lists, so the task row still
+   * leaves Inbox on the send frame; the detail read fills the same row in when it lands (it finds it in the list). */
+  function fromRecord(sid, agent) {
+    const ai = L.agentInbox; if (typeof ai?.needsState !== 'function') return null;
+    const r = (ai.needsState().records || []).find(x => x.thread === sid && (x.agent === 'hermes' ? '' : x.agent) === agent);
+    if (!r) return null;
+    const s = normalize({ id: sid, title: r.title || 'Thread', updated_at: new Date(r.updatedAt || Date.now()).toISOString(), hidden: true, ...(agent ? { agent } : {}) });
+    return s && s.id === sid ? s : null;
   }
   // A send that held a hidden thread in the list is over: it is hidden again, so its task row comes back until the box
   // lists the thread itself (a list read the box un-hid it in has a fresh row).
@@ -407,12 +423,16 @@
     }
   }
   // A new chat is listed before Wizard has created it, so it lands in Working the moment it is sent.
+  // Archived while its send is held (ARCHIVED_NEW): every rebuilt stand-in keeps the archive, also after the box listed
+  // the chat once and then left it out for being archived.
   function addSynthetic(list, agent = '') {
     unShown(list); showReplied(list, agent);
     for (const [sid, p] of PEND) {
-      if (p.kind !== 'new' || (p.agent || '') !== agent || list.some(s => s.id === sid)) continue;
+      if (p.kind !== 'new' || (p.agent || '') !== agent) continue;
+      if (list.some(s => s.id === sid)) continue;
       const at = new Date(p.at).toISOString();
       const s = { id: sid, runtime: 'direct', title: (p.text || 'New chat').slice(0, 60), status: 'submitting', updatedAt: at, preview: p.text, previewRole: 'user', source: 'wizard-mobile', optimistic: true, synthetic: true, agent };
+      if (ARCHIVED_NEW.has(sid)) s.archived = true;
       list.unshift(s); applyPend(s);
     }
   }
@@ -615,7 +635,7 @@
           // A settled action stays applied until a list read that started after it lands.
           for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
           addSynthetic(sessions);
-          this.sessions = sessions; this.deferred = deferred;
+          this.sessions = sessions; this.deferred = deferred; this.listAskedAt = Math.max(this.listAskedAt || 0, started); // sessionInfo: a detail asked earlier is older
           let merged = merge(readLocal(), merge(this.seen, remote));
           if (!merged) { // first run anywhere: everything currently visible counts as read
             const ts = Date.now(); merged = { initializedAt: ts, threads: Object.fromEntries(sessions.slice(0, MAX).map(s => [keyOf(s), recordFor(s, ts)])) };
@@ -1020,7 +1040,7 @@
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
-      const read = ++titleRead;
+      const read = ++titleRead, askedAt = Date.now();
       let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
@@ -1057,7 +1077,10 @@
       // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
       // empty status there must not settle the row: a Working thread used to flash into Ready whenever its history
       // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
-      const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
+      // A detail read asked before the main list's last read is older than the row (wizard-ux issue 2017: a slow box
+      // answered the detail he opened before replying after the list already showed his reply running): its status
+      // must not put the row back to how it was before the reply.
+      const run = s.status && !(!agent && (this.listAskedAt || 0) > askedAt) ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
         // A read that names no provider never wipes the one the row already has for the same model (wizard-ux issue 1973).
         ...(s.model ? { model: s.model, provider: s.provider || (list[i].model === s.model ? list[i].provider || '' : ''), modelLockAt: s.modelLockAt || (list[i].model === s.model ? list[i].modelLockAt || 0 : 0) } : {}) };
@@ -1071,7 +1094,7 @@
     async inboxMove(kind, id, opts = {}) {
       if (!this.agentInbox || (kind !== 'open' && kind !== 'send')) throw new Error('Agent inbox unavailable');
       // The main agent's own row only: a routed thread may share the id (agentSessions), and is never the one moved.
-      // Issue 631: also the private default agent's, while the box names one (its wizard/private-routing switch on).
+      // Issue 631: also the private default agent's, while the box names one.
       const priv = (typeof this.agentInbox.privateDefault === 'function' && this.agentInbox.privateDefault()) || '';
       const mine = a => !otherAgent(a || '') || (!!priv && a === priv);
       const detail = DETAIL.get(id), fromDetail = !!detail && mine(detail.agent || '');
@@ -1093,6 +1116,9 @@
       }
       finally { setTimeout(() => this.refresh(), 800); }
     },
+    // Issue 1997: a new chat archived while this device still holds its send (see ARCHIVED_NEW).
+    _pendingNew(id) { return PEND.get(id)?.kind === 'new'; }, // this device still holds the send that opened the chat
+    _archivedNew(id, on) { if (!on) { ARCHIVED_NEW.delete(id); return; } for (const k of ARCHIVED_NEW) if (PEND.get(k)?.kind !== 'new') ARCHIVED_NEW.delete(k); ARCHIVED_NEW.add(id); if (ARCHIVED_NEW.size > 50) ARCHIVED_NEW.delete(ARCHIVED_NEW.values().next().value); },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
     async _act(id, patch, write, capMs = 60000) {
@@ -1120,6 +1146,7 @@
       // Archive also clears a saved-result Needs you the Service added (issue 469), so restoring it brings no stale ask:
       // only once the archive itself succeeded (a failed archive keeps the result Continue-able).
       const saved = this.session(id);
+      if (!file && (saved?.synthetic || this._pendingNew?.(id))) this._archivedNew?.(id, true);
       return this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
@@ -1132,6 +1159,7 @@
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
       }, file ? 11 * 60000 : 60000).then(ok => {
+        if (!ok) this._archivedNew?.(id, false);
         if (ok) this.dismissSaved?.(saved);
         // A background task's waiting record goes with its thread (wizard-ux issue 1928): its Inbox row too.
         if (ok) try { void this.agentInbox?.archiveThread?.(id); } catch (_) {}
@@ -1194,6 +1222,7 @@
     },
     // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
     restore(id) {
+      this._archivedNew?.(id, false);
       const s = this.session(id); if (!s) return Promise.resolve(false);
       const at = new Date().toISOString();
       if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));

@@ -45,9 +45,23 @@
    * wizard-ux issue 1880: wizard/sent-threads, Chats › Sent lists threads, the same rows as Inbox;
    * wizard-ux issue 1957: wizard/chats-switcher, phone Chats has one bar and the Chats tile's view switcher;
    * wizard-app-manager issue 799: wizard/phone-tester-builds, every For testers box offers its phones the tester build;
-   * wizard-ux issue 1941: wizard/plain-alert-rows, Chats alerts are plain thread rows marked by a small bell): a saved on/off for one is
+   * wizard-ux issue 1941: wizard/plain-alert-rows, Chats alerts are plain thread rows marked by a small bell;
+   * wizard-agent-service issue 597: wizard/agent-approvals, container agents run code without an approval nobody
+   * sees; wizard-ux issue 1580: wizard/channel-auto-emoji, a new channel gets a fitting emoji from its name;
+   * wizard-agent-service issue 626: wizard/private-mode, Settings › Privacy and private mode for everyone;
+   * wizard-ux issue 1599: wizard/ai-apps-running, the AI apps sidebar shows the Running view;
+   * wizard-ux issue 1605: wizard/channel-model-emoji, a new channel with no emoji gets one from the fast model;
+   * wizard-ux issue 1624: wizard/mac-app-updates, Wizard for Mac shows its own updates in About & updates;
+   * wizard-ux issue 1627: wizard/share-people-box, Share's People row reads Messenger's people from the box;
+   * wizard-ux issue 1639: wizard/attach-menu-icons, the Android attach menu shows a round icon on each choice;
+   * wizard-agent-service issue 629: wizard/private-routing, the orb sends each take straight to the agent it is for;
+   * wizard-app-manager issue 1074: wizard/shorter-app-updates, an app update stops the app once;
+   * wizard-ux issue 1668: wizard/boundary-agent-access, Connected accounts' Agent access works under the browser boundary;
+   * wizard-ux issue 1629: wizard/app-location, only apps that declare location (Maps) may ask for it;
+   * wizard-ux issue 1669: wizard/phone-badge-look, the Android Messenger icon count is exact in a One UI badge;
+   * wizard-ux issue 1802: wizard/private-ai-nudge, the install sheet recommends private AI for a personal-data app): a saved on/off for one is
    * cleared from this device, once, so no stale choice is kept. */
-  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/sent-rows', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/chats-switcher', 'wizard/phone-tester-builds', 'wizard/plain-alert-rows'];
+  const GONE = ['wizard/desktop-chats', 'wizard/app-panel-left', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/graceful-restart', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/swap-sides', 'wizard/phone-app-notifications', 'wizard/chat-app-switches', 'wizard/clear-chat-notifications', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/sent-rows', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/chats-switcher', 'wizard/phone-tester-builds', 'wizard/plain-alert-rows', 'wizard/agent-approvals', 'wizard/channel-auto-emoji', 'wizard/private-mode', 'wizard/ai-apps-running', 'wizard/channel-model-emoji', 'wizard/mac-app-updates', 'wizard/share-people-box', 'wizard/attach-menu-icons', 'wizard/private-routing', 'wizard/shorter-app-updates', 'wizard/boundary-agent-access', 'wizard/app-location', 'wizard/phone-badge-look', 'wizard/private-ai-nudge'];
   if (Store.read()) {
     let dirty = false;
     for (const k of ['defaultsOff', 'promotedMigrated']) if (Array.isArray(state[k]) && state[k].some(id => GONE.includes(id))) { state[k] = state[k].filter(id => !GONE.includes(id)); dirty = true; }

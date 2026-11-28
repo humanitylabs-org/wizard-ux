@@ -70,12 +70,12 @@ window.WizCore.channelEmojiName = function channelEmojiName(name, emoji) {
   const t = (emoji + (bare ? ' ' + bare : '')).trim();
   return t.length > 60 ? '' : t;
 };
-/* Auto channel emoji (wizard-ux issue 1580, switch wizard/channel-auto-emoji, off by default): a channel created with
+/* Auto channel emoji (wizard-ux issue 1580, on for everyone): a channel created with
  * no emoji in front of its name gets a fitting one from this small keyword map, instantly and offline ("Money" →
  * "💰 Money"), stored the same way as a picked one (the start of the name). A name that already starts with an emoji,
  * or matches no word here, is kept exactly as typed (no emoji shows as 💬). channelAutoEmoji(name) → the emoji or '';
  * channelAutoName(name) → the name to store. Whole words first ("workout" before "work"), then a word that starts with
- * a keyword of 4+ letters ("podcasting"). The agent's own create tool uses the same list behind the same switch
+ * a keyword of 4+ letters ("podcasting"). The agent's own create tool uses the same list
  * (wizard-agent-service server/channel-emoji.mjs): change both together. */
 window.WizCore.CHANNEL_AUTO_EMOJI = [
   ['💰', 'money finance finances budget budgets bank banking invest investing investment investments tax taxes savings expense expenses crypto bitcoin stocks accounting invoice invoices salary pension'],
@@ -414,7 +414,7 @@ window.WizCore.chats = function createChats(H) {
   dailyLate({ turnHtml });
   chanboxLate({ attachTray, CLIP_SVG, fileUrl, hasContent, pendRef, PREVIEW, syncSend });
   /* Thread actions (Snooze / Archive) and the action icons; core/chats-threadacts.js. */
-  const { ACT, followUpActive, threadActions } = window.WizCore.chatsParts.threadacts({ isWorking, LIVE, WORKING_ST });
+  const { ACT, followUpActive, threadActions, workingNow } = window.WizCore.chatsParts.threadacts({ isWorking, LIVE, WORKING_ST });
   chanuiLate({ ACT });
   draftsLate({ ACT });
   // Notification-thread only: hand it to the agent to stop or fix (the package sends the ask).
@@ -505,7 +505,7 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost?.rendered?.('chats-list', null); // a layout that draws its own list (AI apps sidebar) re-reads it now too
   }
   /* Row actions for threads, alerts and channel lines; core/chats-rowacts.js. */
-  const { NOTE_ACT, noteRowAct, ROW_MENU, rowMenu, threadAct, bindLate: rowactsLate } = window.WizCore.chatsParts.rowacts({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSends, sentSheet, threadBack, toast, vib, W });
+  const { NOTE_ACT, noteRowAct, ROW_MENU, rowMenu, threadAct, bindLate: rowactsLate } = window.WizCore.chatsParts.rowacts({ ACT, actRestore, actUndo, BOOM, ch, CH, closeRowSheet, followUpActive, H, keepThreadOpen, leaveFinishedThread, LIVE, markDone, notifAct, openChannelSheet, openRowSheet, owner, paintListsNow, rowOf, sentSends, sentSheet, threadBack, toast, vib, W, workingNow });
   let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
     const acts = threadActions(s, null);

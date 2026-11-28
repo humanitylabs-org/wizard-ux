@@ -43,15 +43,14 @@ window.WizCore.chatsParts.chanemoji = function ({ chanFace, chanRenameTo, esc, n
     if (off && !f.bare) { const taken = n => spaces().some(s => s.id !== cid && spaceAgent(s) === spaceAgent(sp) && norm(s.name) === norm(n)); for (let i = 2; taken(t); i++) t = `Channel ${i}`; }
     return chanRenameTo(cid, t) !== false;
   }
-  /* Channel emoji from a model (issue 1605, switch wizard/channel-model-emoji, off by default): a channel New channel
+  /* Channel emoji from a model (issue 1605; on for everyone, its switch wizard/channel-model-emoji removed): a channel New channel
    * just stored with no emoji of its own asks the Agent Service for one (POST /wizard/v1/channel-emoji, the fast lookup
    * broker, name only), in the background: the create never waits. On exactly one emoji it renames the channel once,
    * quietly, and only while its name is still exactly as created (a rename, a picked emoji or a delete wins). No broker,
    * a private agent (never asked; the service refuses it too), an error, 8 seconds or an odd answer: it keeps 💬. */
-  const MODEL_EMOJI_SWITCH = 'wizard/channel-model-emoji', MODEL_EMOJI_URL = '/wizard/v1/channel-emoji', MODEL_EMOJI_WAIT = 8000;
-  function chanModelEmojiOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(MODEL_EMOJI_SWITCH); } catch (_) { return false; } }
+  const MODEL_EMOJI_URL = '/wizard/v1/channel-emoji', MODEL_EMOJI_WAIT = 8000;
   async function chanModelEmoji(cid, created, agent, priv) {
-    if (!chanModelEmojiOn() || !cid || !created || priv || chanFace(created).own) return '';
+    if (!cid || !created || priv || chanFace(created).own) return '';
     const ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = setTimeout(() => ctl?.abort(), MODEL_EMOJI_WAIT);
     let emoji = '';
     try {

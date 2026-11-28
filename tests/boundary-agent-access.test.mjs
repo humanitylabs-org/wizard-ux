@@ -1,4 +1,4 @@
-// Agent access under the browser boundary (wizard-ux issue 1668, switch wizard/boundary-agent-access): Connected
+// Agent access under the browser boundary (wizard-ux issue 1668, on for everyone): Connected
 // accounts, sandboxed, asks the shell which agents may use an account app and changes it with a real tap. The real
 // app-services.js runs in a vm with a stand-in boundary and Agent Service; the real boundary ends (browser-boundary.js
 // and browser-boundary-client.js) carry the request and shape the answer. Real Chromium with the real Connected
@@ -14,14 +14,14 @@ const read = p => readFileSync(new URL('../web/' + p, import.meta.url), 'utf8');
 const SWITCH = 'wizard/boundary-agent-access';
 const clone = v => JSON.parse(JSON.stringify(v));
 
-function shell({ on = true, appId = 'connected-accounts', source = 'apps.json', visible = true } = {}) {
+function shell({ tweaks = 'wizard/desktop-chats', appId = 'connected-accounts', source = 'apps.json', visible = true } = {}) {
   const origin = 'https://wizard.example', calls = [];
   const ticks = { messenger: { hermes: true, oscar: false } };
   const win = { location: new URL(origin + '/' + appId + '/') };
   const frame = { tagName: 'IFRAME', isConnected: true, src: win.location.href, contentWindow: win, addEventListener() {}, removeEventListener() {},
     hasAttribute: n => n === 'sandbox', getAttribute: () => frame.src };
   const app = { id: appId, kind: 'wizard', name: 'App', url: '/' + appId + '/', source };
-  const root = { dataset: { tweaks: on ? 'wizard/desktop-chats ' + SWITCH : 'wizard/desktop-chats' } };
+  const root = { dataset: { tweaks } };
   let served = null;
   const reply = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => clone(body) });
   const c = { URL, console, JSON, Date, Promise, location: new URL(origin + '/wizard-os-home/'),
@@ -44,7 +44,7 @@ function shell({ on = true, appId = 'connected-accounts', source = 'apps.json', 
   return { c, calls, ticks, call, view, root };
 }
 
-test('on: Connected accounts reads an account app\'s ticks; the shell asks the Agent Service itself', async () => {
+test('Connected accounts reads an account app\'s ticks; the shell asks the Agent Service itself', async () => {
   const s = shell();
   const v = await s.call('agents.read', { app: 'messenger' });
   assert.equal(v.access.state, 'ok');
@@ -54,7 +54,7 @@ test('on: Connected accounts reads an account app\'s ticks; the shell asks the A
   assert.deepEqual(clone(await s.call('agents.read', { app: 'wizard-google' })), { access: { state: 'absent' } });
 });
 
-test('on: a change needs a real tap in the window, then PUTs exactly the ids', async () => {
+test('a change needs a real tap in the window, then PUTs exactly the ids', async () => {
   const s = shell();
   await assert.rejects(s.call('agents.set', { app: 'messenger', agents: [] }), /needs a tap/);
   assert.equal(s.calls.length, 0);
@@ -85,15 +85,14 @@ test('the shell decides who may ask and for which apps', async () => {
   assert.equal(notes.calls.length + fake.calls.length + s.calls.length, 0);
 });
 
-test('off (the default): nothing is answered and the Agent Service is never asked', async () => {
-  const s = shell({ on: false });
-  await assert.rejects(s.call('agents.read', { app: 'messenger' }), /not available/);
-  await assert.rejects(s.call('agents.set', { app: 'messenger', agents: [] }, { tapped: true }), /not available/);
-  assert.equal(s.calls.length, 0);
+test('on for everyone: answered with no switch in the mix, and the removed switch is gone from the catalog', async () => {
+  const s = shell({ tweaks: '' });
+  const v = await s.call('agents.read', { app: 'messenger' });
+  assert.deepEqual(v.access.agents.map(a => a.id + ':' + a.enabled), ['hermes:true', 'oscar:false']);
+  await s.call('agents.set', { app: 'messenger', agents: ['hermes', 'oscar'] }, { tapped: true });
+  assert.deepEqual(s.ticks.messenger, { hermes: true, oscar: true });
   const cat = JSON.parse(read('tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(SWITCH)); assert.ok(!cat.defaults.includes(SWITCH));
-  const m = JSON.parse(read('tweaks/wizard/boundary-agent-access/manifest.json'));
-  assert.equal(m.id, SWITCH); assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1668']);
+  assert.ok(!cat.tweaks.includes(SWITCH)); assert.ok(!(cat.defaults || []).includes(SWITCH));
 });
 
 test('the boundary carries agents.read / agents.set and only the ticks cross back', async () => {

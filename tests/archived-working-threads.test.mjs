@@ -84,7 +84,8 @@ test('archived stale-running threads remain recoverable without steering stale r
     assert.deepEqual(JSON.parse(JSON.stringify(context.state(archived, runtimeKind))), { working: false, sub: 'Archived' });
     assert.equal(context.working(archived), false, `${runtimeKind} must not steer its stale run`);
   }
-  assert.deepEqual(Array.from(context.actions({ id: 'active', status: 'running' }, null)), []);
+  // wizard-ux issue 1997: a thread still working offers Snooze and Archive (Archive never stops its run).
+  assert.deepEqual(Array.from(context.actions({ id: 'active', status: 'running' }, null)), ['snooze', 'done']);
   assert.equal(context.working({ id: 'active', status: 'running' }), true);
   assert.deepEqual(Array.from(context.actions({ id: 'busy', archived: true, status: 'running' }, null)), [], 'optimistic archive writes stay disabled');
   assert.deepEqual(Array.from(context.actions({ id: 'aged', aged: true, status: 'running' }, null)), ['restore', 'snooze']);

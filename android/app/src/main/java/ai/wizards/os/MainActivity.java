@@ -276,6 +276,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (!(this instanceof AppSessionActivity)) deleteSharedPreferences("reach-answer");
         // The same for the removed switch wizard/app-windows (wizard-os issue 650).
         if (!(this instanceof AppSessionActivity)) AppWindows.forgetOldSwitch(this);
+        // The same for the removed switch wizard/phone-badge-look (wizard-ux issue 1669); badges drawn before redraw once.
+        if (!(this instanceof AppSessionActivity)) ai.wizards.os.badge.BadgeLook.upgrade(this);
         // And for the removed switch wizard/assist-attach (wizard-os issue 655).
         if (!(this instanceof AppSessionActivity)) ai.wizards.os.assist.AssistAttach.forgetOldSwitch(this);
         if (ai.wizards.os.device.AppState.origin(this).isEmpty()) {
@@ -1307,12 +1309,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /* ---------------- Microphone for the orb ---------------- */
 
-    /* Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default): never
-     * granted silently. Switch off or another address: denied with no prompt. Otherwise Android's own location prompt
+    /* Location for the apps that ask for it (wizard-ux issue 1629, on for everyone): never granted silently. Another
+     * address: denied with no prompt. Otherwise Android's own location prompt
      * first (once; Android remembers the answer and it can be turned off in the phone's settings), and the WebView is
-     * told never to remember the grant itself, so each ask re-checks the switch and Android's permission. */
+     * told never to remember the grant itself, so each ask re-checks Android's permission. */
     private void handleGeolocation(String origin, GeolocationPermissions.Callback cb) {
-        if (!AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin)) {
+        if (!AppLocation.mayAsk(ai.wizards.os.device.AppState.primaryOrigin(this), origin)) {
             cb.invoke(origin, false, false);
             return;
         }
@@ -1361,8 +1363,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (cb == null) return;
             boolean ok = false;
             for (int r : results) if (r == PackageManager.PERMISSION_GRANTED) ok = true;
-            // Still re-check the switch: it may have been turned off while Android's prompt was showing.
-            cb.invoke(origin, ok && AppLocation.mayAsk(AppLocation.on(this), ai.wizards.os.device.AppState.primaryOrigin(this), origin), false);
+            // Still re-check the address: only this Wizard's own pages are ever answered.
+            cb.invoke(origin, ok && AppLocation.mayAsk(ai.wizards.os.device.AppState.primaryOrigin(this), origin), false);
             return;
         }
         if (code == REQ_EVERYWHERE) { continueEverywhere(); return; }
@@ -2169,14 +2171,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             ai.wizards.os.notify.AppPush.setOn(MainActivity.this, on);
         }
-        /* ---- Location for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default):
-         * the main page copies the switch here (AppLocation). ---- */
+        /* ---- Location for the apps that ask for it (wizard-ux issue 1629, on for everyone). The name and the on/off
+         * argument stay for pages from before the switch wizard/app-location went; the argument is ignored and the
+         * copy older versions kept is dropped. ---- */
         @JavascriptInterface
         public void appLocationSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
-            AppLocation.setOn(MainActivity.this, on);
-            // Off: forget any grant this WebView still holds; the shell also takes `geolocation` off open frames.
-            if (!on) runOnUiThread(() -> GeolocationPermissions.getInstance().clearAll());
+            AppLocation.forgetSwitch(MainActivity.this);
         }
         /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default): the main
          * page copies the switch here (PinInstant); a pinned page says its shell release and when its app has loaded. ---- */
@@ -2200,13 +2201,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 // very next open has its last screen even if this window is swiped away.
                 if (!pinShownSaved) { pinShownSaved = true; main.postDelayed(MainActivity.this::pinShotSaveIfFront, PinInstantPolicy.SHOT_AFTER_SHOWN_MS); }
             });
-        }
-        /* ---- One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default): the main page
-         * copies the switch here (badge/BadgeLook); a change redraws the Messenger icon count at once. ---- */
-        @JavascriptInterface
-        public void badgeLookSwitch(boolean on) {
-            if (MainActivity.this instanceof AppSessionActivity) return;
-            ai.wizards.os.badge.BadgeLook.setOn(MainActivity.this, on);
         }
         /* ---- App windows (wizard-os issue 650, on for everyone): any page asks to open an app's own window for a link
          * (false = keep the link where it is). ---- */

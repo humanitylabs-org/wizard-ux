@@ -1,3 +1,0 @@
-/* Location for Maps (wizard-ux issue 1629): nothing in the shell looks different; app frames read the switch. This
- * rule only marks the switch as present. */
-html[data-tweaks~="wizard/app-location"] { --wos-app-location: 1; }

@@ -201,7 +201,7 @@ test('the buttons are wired: the Running view row, the header, the row menu and 
   for (const rule of inboxRules) assert.match(rule.trim(), /^(?:@media[^{]*\{\s*)?html:root /, 'every rule keeps the html:root weight');
 });
 
-// wizard-agent-service issue 631 (box switch wizard/private-routing): the box names its private default agent, whose
+// wizard-agent-service issue 631: the box names its private default agent, whose
 // threads then move like the main agent's, through that agent's own Hermes. Nothing named: exactly as before.
 test('a private default agent named by the box: its threads move, with their agent; other agents still do not', async () => {
   const f = inboxReader(path => ({ json: path.includes('?') ? { records: [], stay: [], private_default: 'private-ai' } : { record: { id: 'inbox_' + 'b'.repeat(24) } } }));

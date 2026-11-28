@@ -25,7 +25,7 @@
   const PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>';
   // Other agents: how much of the OTHER agents' chats this agent may see (Agent Service OTHER_AGENTS_LEVELS).
   const OTHERS = { none: 'None', titles: 'Titles', search: 'Search', read: 'Read' };
-  // wizard-agent-service issue 597 (switch wizard/agent-approvals): what a container agent does with code and flagged commands.
+  // wizard-agent-service issue 597 (on for everyone): what a container agent does with code and flagged commands.
   const APPROVALS = [['approve', 'Just run', 'Runs code and scripts in its own container without asking. Clearly destructive commands are refused at once.'], ['ask', 'Ask me', 'Flagged commands wait for your Approve in the chat, for up to an hour. Code it can’t ask about is refused at once.'], ['deny', 'Refuse', 'Code and flagged commands are refused at once, and the agent is told why.']];
   const FILES = [['none', 'None', 'No files at all'], ['own', 'Own folder', 'Only its own folder'], ['shared-read', 'Read shared', 'Can read your shared files'], ['shared-write', 'Read & write', 'Can read and change your shared files']];
 
@@ -397,7 +397,7 @@
     if (d.toolyes) { const id = d.toolyes; closeSheet(); editPerms(p => { const s = new Set(p.outside_tools || []); s.add(id); p.outside_tools = [...s]; }, 'Turned on'); return; }
     if (d.files) { editPerms(p => { p.files = d.files; }, 'Files updated'); return; }
     if (d.others) { editPerms(p => { p.other_agents = d.others; }, 'Saved'); return; }
-    // wizard-agent-service issue 597 (switch wizard/agent-approvals): approve or deny commands nobody is asked about.
+    // wizard-agent-service issue 597 (on for everyone): approve or deny commands nobody is asked about.
     if (d.unattended && !t.disabled) { editPerms(p => { p.unattended_approvals = d.unattended; }, 'Saved'); return; }
     if ('standardChats' in d && !t.disabled) { editPerms(p => { p.read_standard_chats = !p.read_standard_chats; }, 'Standard chat access updated'); return; }
     if (d.add) { openSheet({ type: 'add', kind: d.add }); return; }

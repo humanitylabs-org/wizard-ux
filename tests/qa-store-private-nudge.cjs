@@ -1,16 +1,14 @@
-// Install sheet recommends private AI (wizard-ux issue 1802, switch wizard/private-ai-nudge): fixture-only browser proof.
-// This tree's web/ is served from disk; the host page stands in for the shell (its data-tweaks carries the switch, a
-// WosModels stand-in says the owner's standard AI is Claude, a WosPrivacy stand-in records the switch-over it is
+// Install sheet recommends private AI (wizard-ux issue 1802; on for everyone, its switch was removed): fixture-only browser proof.
+// This tree's web/ is served from disk; the host page stands in for the shell (a WosModels stand-in says the owner's standard AI is Claude, a WosPrivacy stand-in records the switch-over it is
 // asked to open) and a fake box answers the Store's reads plus the two writes this flow makes: the install and the
 // app's agents (PUT /wizard/v1/apps/<id>/agents). Every other write is refused.
-//   node tests/qa-store-private-nudge.cjs                    switch on: every case below
-//   QA_SWITCH=off node tests/qa-store-private-nudge.cjs      switch off: the sheet is the old Privacy first card
+//   node tests/qa-store-private-nudge.cjs                    every case below
 //   QA_WEB=<other tree>/web                                  serve another tree (main) for the before shots
 // Env: QA_OUT=<dir> (default <tmp>/store-private-nudge), QA_SKINS=nebula,obsidian-light, QA_WIDTH=412.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os'), assert=require('node:assert/strict');
 const WEB=process.env.QA_WEB || path.resolve(__dirname,'..','web'), OUT=process.env.QA_OUT || path.join(os.tmpdir(),'store-private-nudge');
-const ON=process.env.QA_SWITCH!=='off', origin='https://store-nudge.test', C='c'.repeat(40), W=Number(process.env.QA_WIDTH||412);
+const origin='https://store-nudge.test', C='c'.repeat(40), W=Number(process.env.QA_WIDTH||412);
 const SKINS=(process.env.QA_SKINS||'nebula,obsidian-light').split(',').map(id=>({id,css:id.startsWith('obsidian')?'/wizard-os-home/skins/obsidian/skin.css':''}));
 const listing=(id,name,summary)=>({id,name,summary,repo:'humanitylabs-org/'+id,version:'1.0.0',commit:C,source:'standard',source_name:'Standard',channel:'standard',type:'view',category:'app',tags:['work'],publisher:'humanitylabs-org',uses:[],provides:[]});
 // Messenger here declares personal data (privacy: private), as the issue's acceptance assumes; Tracker declares nothing.
@@ -33,7 +31,7 @@ const CASES=[
  fs.mkdirSync(OUT,{recursive:true});
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']}); const results=[];
  try { for(const skin of SKINS) for(const c of CASES) {
-  const tag=`${ON?'on':'off'}-${skin.id}-${c.name}`;
+  const tag=`${skin.id}-${c.name}`;
   const context=await browser.newContext({viewport:{width:W,height:900},hasTouch:true,isMobile:true,serviceWorkers:'block'});
   const errors=[], unsafe=[], puts=[];
   // The fake box: which apps are installed and which agents can use each.
@@ -69,7 +67,7 @@ const CASES=[
     return route.fulfill({status:404,json:{error:'fixture_only'}});
    }
    if(m!=='GET') { unsafe.push(m+' '+p); return route.abort(); }
-   if(p==='/host') return route.fulfill({contentType:'text/html',body:`<!doctype html><html data-skin="${skin.id}" data-tweaks="${ON?'wizard/private-ai-nudge':''}"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/wizard-os-home/core/base.css">${skin.css?`<link rel="stylesheet" href="${skin.css}">`:''}<style>html,body{margin:0;width:100%;height:100%;background:var(--bg)}.win{width:100%;height:100%;background:var(--sk-win,var(--bg))}iframe{border:0;width:100%;height:100%;display:block}</style><script>localStorage.setItem('wos.skin','${skin.id}');window.routes=[];window.privacy=[];
+   if(p==='/host') return route.fulfill({contentType:'text/html',body:`<!doctype html><html data-skin="${skin.id}"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/wizard-os-home/core/base.css">${skin.css?`<link rel="stylesheet" href="${skin.css}">`:''}<style>html,body{margin:0;width:100%;height:100%;background:var(--bg)}.win{width:100%;height:100%;background:var(--sk-win,var(--bg))}iframe{border:0;width:100%;height:100%;display:block}</style><script>localStorage.setItem('wos.skin','${skin.id}');window.routes=[];window.privacy=[];
 addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.type==='wizard:app-route')window.routes.push(e.data);});
 window.WosModels={ready:true,load:async()=>[],defaultOption:()=>({value:'claude-opus-4-6',provider:'anthropic',isGlobalDefault:true})};
 window.WosPrivacy={on:()=>true,open:async at=>{window.privacy.push(at);if(at==='setup')setTimeout(()=>window.qaSwitchOver(),1500);return true;}};</script><script src="/wizard-os-home/core/skins.js"></script><script>
@@ -98,12 +96,7 @@ window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]}),refreshApps:a
   if(sheetOpen) { out.sheet=(await f.locator('#sheet').innerText()).replace(/\s+/g,' ').trim(); fs.writeFileSync(path.join(OUT,`${tag}-sheet.html`),await f.locator('#sheet').innerHTML()); }
   out.shotInstall=await shot('install');
   const personalNoPrivate=(PERSONAL.has(c.app)||LABELLED.has(c.app)) && !c.agents.some(a=>a.privacy==='private');
-  if(!ON) {
-   // Switch off: exactly the sheet as before (Privacy first) for a personal app on a box with no private agent.
-   assert.equal(out.card,0,'no new card while off');
-   if(personalNoPrivate && PERSONAL.has(c.app)) assert.equal(out.oldCard,1,'old Privacy first card');
-   if(LABELLED.has(c.app)) assert.equal(out.oldCard,0,'a labelled app: no card at all while off, as before');
-  } else if(personalNoPrivate) {
+  if(personalNoPrivate) {
    assert.equal(out.card,1,'the card shows');
    assert.match(out.sheet,new RegExp(`${name} ${LABELLED.get(c.app)||'holds personal data'}\\. We recommend private AI for apps like this, so no AI company sees it\\.`));
    assert.match(out.sheet,/Set up private AI/); assert.match(out.sheet,/Use Claude for now/); assert.match(out.sheet,/Why it matters/);
@@ -140,7 +133,7 @@ window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]}),refreshApps:a
   results.push(out); await context.close();
  }
  // Why it matters: tap it on a fresh box and the page opens; with no such page (WosPrivacy off) the link is not drawn.
- if(ON) for(const why of [true,false]) {
+ for(const why of [true,false]) {
   const context=await browser.newContext({viewport:{width:W,height:900},hasTouch:true,isMobile:true,serviceWorkers:'block'});
   const installed=new Set();
   await context.route('**/*',async route=>{
@@ -158,7 +151,7 @@ window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]}),refreshApps:a
     if(p.includes('/router/v1/')) return route.fulfill({json:{models:[],services:[],providers:[]}});
     return route.fulfill({status:404,json:{}});
    }
-   if(p==='/host') return route.fulfill({contentType:'text/html',body:`<!doctype html><html data-tweaks="wizard/private-ai-nudge"><script>window.privacy=[];window.WosModels={ready:true,load:async()=>[],defaultOption:()=>({value:'gpt-5',provider:'openai-codex',isGlobalDefault:true})};${why?`window.WosPrivacy={on:()=>true,open:async at=>{window.privacy.push(at);return true;}};`:''}window.WizCore={apps:()=>({APPS:[]}),refreshApps:async()=>true};</script><body><iframe style="width:100%;height:900px;border:0" src="/wizard-os-home/store/index.html"></iframe></body></html>`});
+   if(p==='/host') return route.fulfill({contentType:'text/html',body:`<!doctype html><html><script>window.privacy=[];window.WosModels={ready:true,load:async()=>[],defaultOption:()=>({value:'gpt-5',provider:'openai-codex',isGlobalDefault:true})};${why?`window.WosPrivacy={on:()=>true,open:async at=>{window.privacy.push(at);return true;}};`:''}window.WizCore={apps:()=>({APPS:[]}),refreshApps:async()=>true};</script><body><iframe style="width:100%;height:900px;border:0" src="/wizard-os-home/store/index.html"></iframe></body></html>`});
    if(p.startsWith('/wizard-os-home/')) { const file=path.join(WEB,decodeURIComponent(p.slice('/wizard-os-home/'.length)));
     if(file.startsWith(WEB) && fs.existsSync(file) && fs.statSync(file).isFile()) return route.fulfill({contentType:file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':'application/octet-stream',body:fs.readFileSync(file)}); }
    return route.fulfill({status:404,body:''});
@@ -177,7 +170,7 @@ window.WizCore={apps:()=>({APPS:[{url:'/wizard-os-home/store/'}]}),refreshApps:a
   results.push({tag:`on-why-${why}`,text}); await context.close();
  }
  } finally { await browser.close(); }
- fs.writeFileSync(path.join(OUT,`report-${ON?'on':'off'}.json`),JSON.stringify(results.map(({shotInstall,shotAfter,shotWaiting,...r})=>r),null,1));
+ fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(results.map(({shotInstall,shotAfter,shotWaiting,...r})=>r),null,1));
  console.log(JSON.stringify(results.map(r=>({tag:r.tag,card:r.card,oldCard:r.oldCard,done:r.done})),null,0));
  console.log('ok',results.length,'cases');
 })().catch(e=>{console.error(e);process.exit(1);});

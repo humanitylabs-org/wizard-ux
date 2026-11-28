@@ -1,5 +1,5 @@
-/* Settings › Privacy (wizard-ux issue 1801; spec "Private mode as an opt-in", sections 3-6 and 8.4), behind the owner's
- * switch `wizard/private-mode`, off by default. The Agent Service reads the same switch from the Look file and does the
+/* Settings › Privacy (wizard-ux issue 1801; spec "Private mode as an opt-in", sections 3-6 and 8.4), on for everyone
+ * (James said yes at show-and-tell, 27 Nov 2026: the switch `wizard/private-mode` is removed). The Agent Service does the
  * work (wizard-agent-service issue 626, server/private-mode.mjs); this module is the screens on top of it:
  *   GET  /wizard/v1/private-mode          { on, mode: off|setting_up|on, next_step: agent|apps|context|default|done,
  *                                           private_agent, moved_apps, context, default_agent }
@@ -14,18 +14,22 @@
  * screen is one Service step, and reopening starts at the box's next_step. Back and an outside tap close the sheet.
  * Also opened from the model picker's Private group (setupDue), the Welcome's "Why does this matter?" and a trusted
  * app's 'wizard:app-route' { action: 'private-mode' } (the Tinfoil app, the install sheet).
- *   WosPrivacy.on() / setupDue() / open(screen?) / close() / back() / isOpen / state / check */
+ * The box's answers are read when Settings › Privacy or the sheet asks, never at page load.
+ *   WosPrivacy.on() (false only once an older box said it has no private mode) / setupDue() / open(screen?) / close() / back() /
+ *   isOpen / state / check */
 (() => {
   'use strict';
   if (window.WosPrivacy) return;
-  const SWITCH = 'wizard/private-mode', STATE = '/wizard/v1/private-mode', CHECK = '/wizard/v1/privacy-check', PF = '/wizard/v1/private-first';
+  const STATE = '/wizard/v1/private-mode', CHECK = '/wizard/v1/privacy-check', PF = '/wizard/v1/private-first';
   const TINFOIL = 'wizard-tinfoil', TINFOIL_URL = '/wizard-tinfoil/', TINFOIL_STATUS = '/wizard-tinfoil/api/status';
   const ASK = 'Why would I want private AI?';
   const VIDEO = ''; // aiwizards.com video: drawn once the content exists
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const on = () => { try { return String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(SWITCH); } catch (e) { return false; } };
   const tsig = ms => { try { if (AbortSignal.timeout) return AbortSignal.timeout(ms); } catch (e) {} return undefined; };
   const P = { st: null, chk: null, pf: null, tin: null, at: 0, reading: null };
+  // No switch: available unless this box's Agent Service has said it has no private mode (an older one answers on: false),
+  // so the Store and app routes keep their own private-agent fallback there.
+  const on = () => P.st?.on !== false;
   async function getJson(url) {
     const r = await fetch(url, { credentials: 'same-origin', cache: 'no-store', signal: tsig(6000) });
     const j = await r.json().catch(() => null);
@@ -44,9 +48,8 @@
   }
   // The box's answers, read when Settings or the sheet asks (at most every 15 s unless forced).
   function read(force) {
-    if (!on()) return Promise.resolve(null);
     if (P.reading) return P.reading;
-    // The box learns the switch from the Look file a moment after this device: a not-yet answer is asked again soon.
+    // An older box without private mode answers `on: false`: asked again sooner, in case it was just updated.
     if (!force && P.st && Date.now() - P.at < (P.st.on ? 15000 : 3000)) return Promise.resolve(P.st);
     P.reading = (async () => {
       const [st, chk, pf] = await Promise.all([getJson(STATE).catch(() => null), getJson(CHECK).catch(() => null), getJson(PF).catch(() => null)]);
@@ -102,7 +105,6 @@
     }).join('');
   }
   function pageHtml() {
-    if (!on()) return '';
     if (Date.now() - P.at > (ready() ? 15000 : 3000) && !P.reading) read();
     const check = ready() ? `<div class="st-group" data-pm-checkgroup><h4>Privacy check</h4><p class="pm-note">Each app that holds personal data, the agent that uses it, and whose servers that AI runs on.</p>${checkRows('move')}${S.note && !S.open ? `<p class="pm-note${S.note.startsWith('!') ? ' bad' : ''}" role="status">${esc(S.note.replace(/^!/, ''))}</p>` : ''}${mode() !== 'on' && !unfinished() ? `<button type="button" class="st-row wz-row" data-pm-setup><span class="st-tx"><b>Set up private AI</b></span><span class="st-go">›</span></button>` : ''}</div>` : '';
     return `<div class="st-group" data-pm-group><h4>Private AI</h4>${rowHtml()}<button type="button" class="st-row wz-row" data-pm-why><span class="st-tx"><b>Why it matters</b></span><span class="st-go">›</span></button></div>${check}`;
@@ -190,7 +192,6 @@
     requestAnimationFrame(() => S.el?.querySelector('.ar-head b')?.focus?.({ preventScroll: true }));
   }
   async function open(at = '') {
-    if (!on()) return false;
     S.from = at;
     if (!S.el) { S.el = document.createElement('div'); S.el.className = 'aroute pm-sheet'; S.el.dataset.privacySheet = ''; document.body.appendChild(S.el); }
     S.open = true; S.busy = ''; S.note = ''; S.screen = at === 'why' ? 'why' : 'loading'; paint();
@@ -229,7 +230,6 @@
     const t = e.target?.closest?.('[data-pm-row], [data-pm-why], [data-pm-setup], [data-pm-move], .pm-sheet');
     if (!t) return;
     if (t.classList.contains('pm-sheet')) { if (e.target === t) { e.stopPropagation(); close(); } else sheetTap(e); return; }
-    if (!on()) return;
     e.stopPropagation(); e.preventDefault();
     if (t.dataset.pmRow != null) { const r = t.dataset.pmRow; if (r === 'on') open('off'); else if (r === 'off' || r === 'finish') open('setup'); return; }
     if (t.dataset.pmWhy != null) { open('why'); return; }
@@ -249,23 +249,13 @@
     if (t.dataset.pmAgents != null) { const id = P.st?.standard_agent || 'hermes'; close(); window.WosAppRoute?.openAgents?.(id); return; }
     if (t.dataset.pmAsk != null) ask();
   }
-  // The switch turned on or off: the page and an open sheet follow at once.
-  let was = false;
-  const follow = () => {
-    const now = on(); if (now === was) return; was = now;
-    if (!now) { if (S.open) close(); return; }
-    // Just switched on: the box follows once its Look file has the switch, so ask again a few times.
-    read(true); for (const ms of [1500, 5000, 12000]) setTimeout(() => { if (on() && !ready()) read(true); }, ms);
-  };
-  try { new MutationObserver(follow).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (e) {}
-  follow();
   try {
-    window.WosSettings?.register?.({ id: 'private-mode', page: 'privacy', aliases: ['private-mode', 'privacy-check', 'private-ai'], available: on, html: pageHtml, act: () => false });
+    window.WosSettings?.register?.({ id: 'private-mode', page: 'privacy', aliases: ['private-mode', 'privacy-check', 'private-ai'], html: pageHtml, act: () => false });
   } catch (e) { console.error(e); }
   window.WosPrivacy = {
     on, open, close, back: () => close() ? 'privacy' : '', read,
     // The model picker's Private group: Set up private AI while there is no private agent yet.
-    setupDue() { if (!on() || P.st?.on === false) return false; const AG = window.WosAgents; return !!AG?.ready && !AG.others?.().some(a => AG.isPrivate(a)); },
+    setupDue() { if (P.st?.on === false) return false; const AG = window.WosAgents; return !!AG?.ready && !AG.others?.().some(a => AG.isPrivate(a)); },
     get isOpen() { return S.open; }, get state() { return P.st; }, get check() { return P.chk; }, get screen() { return S.screen; },
   };
 })();

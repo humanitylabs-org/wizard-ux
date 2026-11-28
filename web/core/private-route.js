@@ -1,5 +1,5 @@
-/* Wizard UX core: private routing, the shell half (wizard-ux issue 1804, switch wizard/private-routing, off by default;
- * the Agent Service half, which decides, is wizard-agent-service issue 629). In private mode /wizard/v1/route names the
+/* Wizard UX core: private routing, the shell half (wizard-ux issue 1804; on for everyone, switch wizard/private-routing
+ * removed; the Agent Service half, which decides, is wizard-agent-service issue 629). In private mode /wizard/v1/route names the
  * agent each orb take is for. The outbox (web/outbox.js, routeChoice/applyChoice) puts the take on that agent with the
  * owner's exact words; this part makes it feel like talking to that agent:
  *   - the new thread opens in front (no relay, no "asking…" step);
@@ -8,22 +8,22 @@
  *     thread on that agent, the old thread stopped and removed when it has no reply yet, and one correction on the
  *     Sent log row (POST /wizard/v1/sent/<id>/correct {agent}).
  * The chip's record (thread -> agent, model, why, Sent id, words) is kept on this device only (wos.private-route.v1).
- * Switch off: nothing paints, nothing opens, and the outbox never applies an answer.
- *   WosPrivateRoute.on()            -> the switch is on
- *   WosPrivateRoute.answer(j)       -> { cmd, sent_id } when a route answer names an agent and the switch is on, else null
+ * Only a box whose default agent is private names an agent; anywhere else nothing paints and nothing opens.
+ *   WosPrivateRoute.on()            -> this Wizard's default agent is a private agent (the box routes privately)
+ *   WosPrivateRoute.answer(j)       -> { cmd, sent_id } when a route answer names an agent, else null
  *   WosPrivateRoute.chipHtml(sid)   -> the chip for that thread, or ''
  *   WosPrivateRoute.record(sid) / remember(sid, rec) / move(sid, agentId) / openSheet(sid) / closeSheet()
  */
 (() => {
   'use strict';
   if (window.WosPrivateRoute) return;
-  const ID = 'wizard/private-routing', KEY = 'wos.private-route.v1', KEEP = 40;
+  const KEY = 'wos.private-route.v1', KEEP = 40;
   const AGENT_ID = /^[a-z0-9][a-z0-9-]{0,40}$/, SID = /^(?!\.{1,2}$)[A-Za-z0-9._:-]{1,180}$/;
   const WHY = { name: 'you named it', private_label: 'personal data', thread: 'this thread', default: 'default', moved: 'you moved it' };
   const J = { 'Content-Type': 'application/json' };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const on = () => { try { return (document.documentElement.dataset.tweaks || '').split(/\s+/).includes(ID); } catch (_) { return false; } };
   const AG = () => window.WosAgents;
+  const on = () => { try { const A = AG(), d = A?.get?.(A.defaultId()); return !!d && d.id !== 'hermes' && !!A.isPrivate?.(d); } catch (_) { return false; } };
   function all() { try { const v = JSON.parse(localStorage.getItem(KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } }
   function save(v) {
     const keep = Object.entries(v).sort((a, b) => (b[1]?.at || 0) - (a[1]?.at || 0)).slice(0, KEEP);
@@ -37,7 +37,6 @@
     save(v);
   }
   function answer(j) {
-    if (!on()) return null;
     const c = j?.cmd;
     return c && c.route === 'agent' && typeof c.agent_id === 'string' && AGENT_ID.test(c.agent_id) ? { cmd: c, sent_id: typeof j.sent_id === 'string' ? j.sent_id : '' } : null;
   }
@@ -56,7 +55,6 @@
     return AG()?.modelName?.(a, model) || model;
   }
   function chipHtml(sid) {
-    if (!on()) return '';
     const r = record(sid); if (!r) return '';
     const a = AG()?.get?.(r.agent), priv = !!a && AG().isPrivate?.(a);
     const parts = [agentLabel(r.agent), modelLabel(r.agent, r.model, r.provider), WHY[r.why] || WHY.default].filter(Boolean);
@@ -74,7 +72,7 @@
   function closeSheet() { if (!sheet) return false; sheet.remove(); sheet = null; return true; }
   function openSheet(sid) {
     closeSheet();
-    const r = record(sid); if (!r || !on()) return false;
+    const r = record(sid); if (!r) return false;
     const A = AG(), list = choices();
     const row = a => `<button type="button" class="wpr-opt${a.id === r.agent ? ' cur' : ''}" data-wprmove="${esc(a.id)}"${a.id === r.agent ? ' aria-current="true" disabled' : ''}>${A.sigil(a, 'wpr-sig')}`
       + `<span class="wpr-on"><b>${esc(a.label)}</b><small>${esc([A.isPrivate(a) ? 'Private agent' : a.is_default ? 'Main agent' : 'Agent', modelLabel(a.id, a.model?.model, a.model?.provider)].filter(Boolean).join(' · '))}</small></span>`
@@ -107,7 +105,7 @@
   // Move: same words, a new thread on the chosen agent; the old one goes when it has no reply yet; one correction.
   async function move(sid, to) {
     const r = record(sid), A = AG(), a = A?.get?.(to), OB = window.WosOutbox;
-    if (!on() || !r || !a || !OB || busy || to === r.agent) return null;
+    if (!r || !a || !OB || busy || to === r.agent) return null;
     busy = true;
     try {
       const other = A.isOther(a.id);
@@ -143,7 +141,7 @@
   // A take the outbox put on its agent (it.privateRoute): remember it and open its thread in front.
   window.WosOutbox?.onNew?.(it => {
     const p = it?.privateRoute;
-    if (!p || !on() || !it.sessionId) return;
+    if (!p || !it.sessionId) return;
     remember(it.sessionId, p);
     setTimeout(() => openThread(it.sessionId), 0);
   });

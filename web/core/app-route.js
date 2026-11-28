@@ -18,7 +18,7 @@
  *                                      or its New agent flow
  *   WosAppRoute.request(msg)           a trusted frame's 'wizard:app-route' message: { id } opens the sheet,
  *                                      { id, action: 'new-private-agent' } starts the private agent setup,
- *                                      { id, action: 'private-mode' } Settings › Privacy's Set up private AI (switch on)
+ *                                      { id, action: 'private-mode' } Settings › Privacy's Set up private AI
  */
 (() => {
   'use strict';

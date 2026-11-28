@@ -1,5 +1,5 @@
 /* The install sheet's private AI card (wizard-ux issue 1802; spec "Private mode as an opt-in", sections 3 item 4, 7
- * and 8.5), behind the owner's switch `wizard/private-ai-nudge`, off by default.
+ * and 8.5), on for everyone (its switch wizard/private-ai-nudge was removed once James approved it, 27 Nov 2026).
  * When an app that declares personal data (the Agent Service's answer for the app: its wizard.md `privacy: private`
  * tag, a private-data slot or its `personal_data` label, wizard-os#929; an app with no declaration is not personal,
  * nothing about apps is written here) is
@@ -8,15 +8,8 @@
  *   Set up private AI · Use <Claude> for now · Why it matters (only while that page exists).
  * Shown on every such install (also after No thanks in the Welcome); never anywhere outside an install.
  * Pure helpers only: store.js owns the reads, the writes and the sheet. */
-export const NUDGE_SWITCH = 'wizard/private-ai-nudge';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-/** The switch, as the shell wears it (the Store runs in the shell's frame; standalone it reads its own page). */
-export function nudgeOn(win = window) {
-  const has = doc => String(doc?.documentElement?.getAttribute?.('data-tweaks') || '').split(/\s+/).includes(NUDGE_SWITCH);
-  try { if (win.parent && win.parent !== win && has(win.parent.document)) return true; } catch (_) {}
-  try { return has(win.document); } catch (_) { return false; }
-}
 const agentsOf = access => (Array.isArray(access?.agents) ? access.agents : []).filter(a => a && typeof a.id === 'string');
 /** The app declares personal data: the `privacy: private` tag or its own `personal_data` label (wizard-os#929). */
 export const personalApp = access => access?.privacy === 'private' || access?.personal_data === true;
