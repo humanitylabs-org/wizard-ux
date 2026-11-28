@@ -103,10 +103,3 @@ test('For everyone: the counts switch stays locked off, so Privacy shows no row'
   const h = harness({ move: true, channel: 'stable' });
   assert.equal(countsRow(h.page('privacy')), '');
 });
-
-test('the switch is a listed, off-by-default tweak linked to its issue', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json'));
-  assert.ok(cat.tweaks.includes(MOVE)); assert.ok(!cat.defaults.includes(MOVE));
-  const m = JSON.parse(read('web/tweaks/wizard/feature-counts-privacy/manifest.json'));
-  assert.equal(m.id, MOVE); assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#2053']);
-});

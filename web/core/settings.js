@@ -924,8 +924,8 @@
    * row hides there. Registered by core/privacy.js, after Private AI. */
   function countsInPrivacy() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes('wizard/feature-counts-privacy'); } catch (e) { return false; } }
   const countsItem = () => countsInPrivacy() ? window.WosExperience?.state?.tweaks?.find(t => t.id === COUNTS_TWEAK && !t.locked) || null : null;
+  // No `available`: that gate is for real capabilities; with the move off or the switch locked, html() is just empty.
   const countsPrivacy = {
-    available: () => !!countsItem(),
     html() { const t = countsItem(); return t ? `<div class="st-group" data-fc-privacy><h4>Feature counts</h4>${tweakSwitches([{ ...t, name: 'Share feature counts with the team' }], 'data-tweak-toggle', window.WosExperience.state.busy)}</div>` : ''; },
     act: (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); return b?.dataset.tweakToggle === COUNTS_TWEAK ? settingAct(ctx, el) : false; },
   };
