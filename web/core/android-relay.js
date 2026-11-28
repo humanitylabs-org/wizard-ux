@@ -177,24 +177,11 @@
   window.addEventListener('wos:experience', () => { pinSync(); });
   setTimeout(() => { switchesSettled = true; pinSync(); }, 5000);
   pinSync();
-  /* One UI-style icon count (wizard-ux issue 1669, switch wizard/phone-badge-look, off by default). The Messenger
-   * home-screen icon's count is drawn by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless
-   * orange-red badge at the tile's corner. The main page copies the switch there; off once settled. */
-  const BADGE_SWITCH = 'wizard/phone-badge-look';
-  let badgeWas = null;
-  function badgeSync() {
-    const n = window.WizardOSNative; if (!n || typeof n.badgeLookSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(BADGE_SWITCH); } catch (_) {}
-    if (!on && !switchesSettled) return;
-    if (on === badgeWas) return;
-    badgeWas = on; try { n.badgeLookSwitch(on); } catch (_) {}
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => badgeSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { badgeSync(); });
-  setTimeout(() => { switchesSettled = true; badgeSync(); }, 5000);
-  badgeSync();
+  /* One UI-style icon count (wizard-ux issue 1669, on for everyone). The Messenger home-screen icon's count is drawn
+   * by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless orange-red badge at the tile's corner.
+   * Android apps 0.10.70 to 0.10.82 still wait to be told it is on (they kept a copy of the old switch
+   * wizard/phone-badge-look), so the main page tells them; newer ones have no such call. */
+  try { const n = window.WizardOSNative; if (n && typeof n.badgeLookSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.badgeLookSwitch(true); } catch (_) {}
   /* Recovery mode (wizard-ux issue 1775, switch wizard/phone-recovery-mode, off by default). When a start of the Android
    * app froze or never finished, the next start opens with the shell only (meeting recording and uploads paused) and a
    * native card: Check for update, Send diagnostics, Start normally. That is decided before any page loads, so the main

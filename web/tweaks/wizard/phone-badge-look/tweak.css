@@ -1,3 +1,0 @@
-/* One UI icon count (wizard-ux issue 1669): nothing in the shell looks different; the Android app draws the icon.
- * This rule only marks the switch as present. */
-html[data-tweaks~="wizard/phone-badge-look"] { --wos-phone-badge-look: 1; }

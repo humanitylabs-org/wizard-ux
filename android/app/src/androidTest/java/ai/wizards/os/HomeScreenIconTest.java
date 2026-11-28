@@ -10,7 +10,6 @@ import android.graphics.RectF;
 import android.graphics.drawable.AdaptiveIconDrawable;
 import android.util.Base64;
 import android.util.Log;
-import ai.wizards.os.badge.BadgeLook;
 import java.io.ByteArrayOutputStream;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
@@ -54,28 +53,28 @@ public class HomeScreenIconTest {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         Bitmap square = Bitmap.createBitmap(192, 192, Bitmap.Config.ARGB_8888);
         new Canvas(square).drawColor(0xff110d1b);
-        assertEquals(0, red(shown(c, HomeScreenShortcuts.adaptive(square, 0)), 0, 0, 216, 216));
+        assertEquals(0, countOrange(shown(c, HomeScreenShortcuts.adaptive(square, 0)), 0, 0, 216, 216));
         for (int n : new int[]{3, 12}) {
             Icon icon = HomeScreenShortcuts.adaptive(square, n);
             assertEquals(Icon.TYPE_ADAPTIVE_BITMAP, icon.getType());
             Bitmap b = shown(c, icon);
-            int topRight = red(b, 108, 0, 216, 108);
-            assertTrue(n + ": red bubble in the top-right, red px=" + topRight, topRight > 600);
-            assertEquals(n + ": nothing red in the bottom half", 0, red(b, 0, 120, 216, 216));
-            assertEquals(n + ": nothing red in the left third", 0, red(b, 0, 0, 72, 216));
+            int topRight = countOrange(b, 108, 0, 216, 108);
+            assertTrue(n + ": badge in the top-right, orange px=" + topRight, topRight > 150);
+            assertEquals(n + ": nothing in the bottom half", 0, countOrange(b, 0, 120, 216, 216));
+            assertEquals(n + ": nothing in the left third", 0, countOrange(b, 0, 0, 72, 216));
         }
     }
     /**
-     * One UI icon count (wizard-ux issue 1669, switch wizard/phone-badge-look). Synthetic counts 3, 85 and 1000 only.
+     * One UI icon count (wizard-ux issue 1669, on for everyone). Synthetic counts 3, 85 and 1000 only.
      * Issue 1960: about a third of the tile high, wholly inside a rounder (n = 3) mask with its soft shadow.
      * Samsung placement: the badge sits at the visible tile's top-right corner inside One UI's squircle, with the exact
      * digits; other launchers keep it inside the safe zone so this emulator's own mask never clips it. Also logs a
-     * 412 px wide picture (tag BadgeShot, base64 PNG in chunks) of the classic and the new look for the pull request.
+     * 412 px wide picture (tag BadgeShot, base64 PNG in chunks) of the look for the pull request.
      */
     @Test public void oneUiBadgeSitsAtTheTileCornerWithExactDigits() {
         Context c = InstrumentationRegistry.getInstrumentation().getTargetContext();
         Bitmap square = glyphSquare();
-        BadgeLook.Style samsung = new BadgeLook.Style(true, true), other = new BadgeLook.Style(true, false);
+        final boolean samsung = true, other = false;
         Bitmap bare = HomeScreenShortcuts.adaptiveArt(square, 0, samsung);
         for (int n : new int[]{3, 17, 85, 1000}) {
             // Samsung: on the raw 288 px adaptive art the visible tile is [48, 240]; its top-right corner is (240, 48).
@@ -105,11 +104,7 @@ public class HomeScreenIconTest {
             assertTrue(n + ": other launcher shows it top-right", countOrange(shownOther, 108, 0, 216, 108) > 150);
             assertEquals(n + ": nothing in the bottom half", 0, countOrange(shownOther, 0, 120, 216, 216));
         }
-        // Switch off: the classic red ringed bubble is unchanged.
-        Bitmap classic = HomeScreenShortcuts.adaptiveArt(square, 85, BadgeLook.Style.CLASSIC);
-        assertEquals("classic has no orange", 0, orangeBox(classic)[4]);
-        logShot("before", sheet(c, square, false));
-        logShot("after", sheet(c, square, true));
+        logShot("after", sheet(c, square));
     }
 
     /**
@@ -227,7 +222,7 @@ public class HomeScreenIconTest {
         return p;
     }
     /** 412 px wide: top row One UI (n = 3 squircle, Samsung placement), bottom row this emulator's mask; counts 3, 17, 85, 1000. */
-    private static Bitmap sheet(Context c, Bitmap square, boolean oneUi) {
+    private static Bitmap sheet(Context c, Bitmap square) {
         int w = 412, tile = 84, gap = (w - 4 * tile) / 5, h = 2 * tile + 3 * 50;
         Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas k = new Canvas(out);
@@ -239,7 +234,7 @@ public class HomeScreenIconTest {
             int top = 34 + row * (tile + 50);
             for (int i = 0; i < counts.length; i++) {
                 int left = gap + i * (tile + gap);
-                BadgeLook.Style style = oneUi ? new BadgeLook.Style(true, row == 0) : BadgeLook.Style.CLASSIC;
+                boolean style = row == 0; // Samsung placement on the One UI row
                 if (row == 0) {
                     // One UI shows the middle 72 of 108 dp, masked by its squircle.
                     Bitmap a = HomeScreenShortcuts.adaptiveArt(square, counts[i], style);
@@ -273,13 +268,5 @@ public class HomeScreenIconTest {
         d.setBounds(0, 0, 216, 216);
         d.draw(new Canvas(b));
         return b;
-    }
-    private static int red(Bitmap b, int x0, int y0, int x1, int y1) {
-        int n = 0;
-        for (int x = x0; x < x1; x++) for (int y = y0; y < y1; y++) {
-            int p = b.getPixel(x, y);
-            if (Color.alpha(p) > 200 && Math.abs(Color.red(p) - 0xE5) < 16 && Math.abs(Color.green(p) - 0x32) < 16 && Math.abs(Color.blue(p) - 0x2D) < 16) n++;
-        }
-        return n;
     }
 }
