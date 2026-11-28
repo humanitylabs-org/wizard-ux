@@ -65,24 +65,15 @@
         (c.data || []).some(p => u.pathname === new URL(p, base).pathname) || match(c.assets,u) || match(c.onlineOnly,u));
   };
   // Optional (c.stamped, wizard-ux issue 1830): a release-stamped shell file (?<param>=<token>) never changes under its
-  // URL, so while the page's flag is saved (c.stamped.flag in c.stamped.cache) its saved copy (exact URL, in the named
-  // c.stamped.copies caches) or the browser's own cache answers it, never a no-store read. No flag, no stamp, or no copy anywhere: exactly the network-first read below.
+  // URL, so its saved copy (exact URL, in the named c.stamped.copies caches) or the browser's own cache answers it,
+  // never a no-store read. No stamp, or no copy anywhere: exactly the network-first read below.
   const st = c.stamped, stampRe = st ? new RegExp(st.pattern) : null;
-  let flagAt = -1e9, flagOn = false;
-  async function stampedOn() {
-    const now = Date.now();
-    if (now - flagAt < 5000) return flagOn;
-    try { flagOn = !!(await (await caches.open(st.cache)).match(url(st.flag))); } catch (_) { flagOn = false; }
-    flagAt = now; return flagOn;
-  }
   async function stamped(request) {
-    if (await stampedOn()) {
-      for (const name of st.copies || []) {
-        const saved = await (await caches.open(name)).match(request).catch(() => null);
-        if (saved && saved.ok) return saved;
-      }
-      try { const response = await fetch(request); if (response.ok && !response.redirected) return response; } catch (_) {}
+    for (const name of st.copies || []) {
+      const saved = await (await caches.open(name)).match(request).catch(() => null);
+      if (saved && saved.ok) return saved;
     }
+    try { const response = await fetch(request); if (response.ok && !response.redirected) return response; } catch (_) {}
     return networkFirst(request, 'shell');
   }
   const isStamped = u => !!stampRe && u.searchParams.getAll(st.param).length === 1 && stampRe.test(u.searchParams.get(st.param));

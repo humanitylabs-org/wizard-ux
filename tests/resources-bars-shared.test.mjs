@@ -41,7 +41,7 @@ test('one group list feeds every bar host; Settings hosts count as viewers so re
   assert.deepEqual([...b.R.groups()], ['ai', 'hw']);
   b.R.bars(b.host);
   await b.settle();
-  assert.deepEqual(b.fetches, ['/api/system/load', '/api/system/devices', '/api/system/health', '/wizard/ai-usage'], 'a Settings host alone (no Home) reads');
+  assert.deepEqual(b.fetches, ['/api/system/load', '/api/system/devices', '/api/system/health', '/wizard-os-home/store-install/_backup-health', '/wizard/ai-usage'], 'a Settings host alone (no Home) reads');
   const groups = b.host.querySelectorAll('[data-rs-group]');
   assert.deepEqual(groups.map(g => g.dataset.rsGroup), ['ai', 'hw']);
   assert.deepEqual(groups.map(g => g.querySelector('.rs-gh b').textContent), ['AI resources', 'Compute resources']);

@@ -5,7 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). Pure rules,
+ * Instant home-screen apps (wizard-ux issue 1830, on for everyone). Pure rules,
  * unit-tested (PinInstantPolicyTest): when a pinned window may skip Connecting, which of its requests the phone keeps,
  * which answers may be kept, and when a saved picture of the app's last screen is still worth showing.
  *
@@ -38,7 +38,7 @@ final class PinInstantPolicy {
     /** With a kept copy of the app's page, the window waits at most this long for the box to say whether it changed;
      *  a slower box gets the kept page at once (its answer is kept for the next open). Usually the 304 comes first. */
     static final long PAGE_WAIT_MS = 250L;
-    /** Can't reach for a pinned window (switch on): at the give-up mark the phone asks the box's /shell-health; a box
+    /** Can't reach for a pinned window: at the give-up mark the phone asks the box's /shell-health; a box
      *  that answers in this long is loading slowly, not away, so the window keeps waiting. */
     static final int HEALTH_TIMEOUT_MS = 4_000;
     /** After the app has shown, a picture of it is kept this soon (not only when the window leaves the screen). */
@@ -50,9 +50,9 @@ final class PinInstantPolicy {
 
     enum Kind { NONE, PAGE, FILE, SHELL }
 
-    /** May this pinned open skip the Connecting screen: switch on, reached within REACHED_MS, same network now. */
-    static boolean skipConnecting(boolean on, long now, long reachedAt, String netThen, String netNow) {
-        if (!on || reachedAt <= 0 || now < reachedAt || now - reachedAt > REACHED_MS) return false;
+    /** May this pinned open skip the Connecting screen: reached within REACHED_MS, same network now. */
+    static boolean skipConnecting(long now, long reachedAt, String netThen, String netNow) {
+        if (reachedAt <= 0 || now < reachedAt || now - reachedAt > REACHED_MS) return false;
         return netNow != null && !netNow.isEmpty() && netNow.equals(netThen);
     }
 
