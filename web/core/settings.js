@@ -952,18 +952,17 @@
   }
   window.addEventListener?.('wos:experience', countsArm);
   window.addEventListener?.('visibilitychange', () => { void countsRun(); countsArm(); });
-  /* Ask before feature counts leave the box (wizard-ux issue 1817, switch wizard/feature-counts-ask, off by default).
+  /* Ask before feature counts leave the box (wizard-ux issue 1817; on for everyone, its switch wizard/feature-counts-ask removed).
    * James, 25 Nov 2026: counts are never sent without the owner's explicit opt-in. Share feature counts stays off until
    * the owner says Share to one plain prompt that names exactly what is sent. The prompt opens the first time the owner
    * taps a thumb in an app's Try new features section (an app frame in this shell, or a thumb already saved that this
    * device finds on its next look), and whenever Share feature counts is turned on from the shell. Share turns it on;
    * Don't share keeps it off and this device never asks again on a thumb. Waiting on the prompt reads or sends nothing.
    * Turning it off stays one tap. */
-  const ASK_TWEAK = 'wizard/feature-counts-ask', ASK_KEY = 'wos.feature-counts.answer.v1', ASK_EVERY = 10 * 60 * 1000;
+  const ASK_KEY = 'wos.feature-counts.answer.v1', ASK_EVERY = 10 * 60 * 1000;
   const ask = { el: null, dismissed: false, at: 0, busy: false, docs: typeof WeakSet === 'function' ? new WeakSet() : null };
-  const askOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(ASK_TWEAK); } catch (e) { return false; } };
   const askAnswer = () => { try { return localStorage.getItem(ASK_KEY) || ''; } catch (e) { return ''; } };
-  const askDue = () => askOn() && !countsOn() && !askAnswer() && !ask.dismissed && !ask.el;
+  const askDue = () => !countsOn() && !askAnswer() && !ask.dismissed && !ask.el;
   const askHtml = example => `<div class="st-confirm-scrim fc-ask-scrim" data-fc-ask><section class="st-confirm fc-ask" role="dialog" aria-modal="true" aria-labelledby="fc-ask-title">`
     + `<h3 id="fc-ask-title">Share feature counts?</h3>`
     + `<p>Your thumbs up and down stay on this Wizard. You can also share them with the WizardOS team, so they see which test features people try and like.</p>`
@@ -997,7 +996,7 @@
   }
   // Turning Share feature counts ON from the shell (Settings row, chat switch card) goes through the prompt; OFF is one tap.
   function askIntercept(id) {
-    if (id !== COUNTS_TWEAK || !askOn() || countsOn() || ask.el) return false;
+    if (id !== COUNTS_TWEAK || countsOn() || ask.el) return false;
     return askOpen('');
   }
   // A thumb tapped in an app frame: the kit's buttons carry data-try-vote inside a row with data-try-id. The vote itself
@@ -1014,7 +1013,7 @@
       askOpen(COUNT_APP.test(app) && sw ? `${app}:${sw}` : '');
     }, true);
   }
-  function askScan() { if (askOn()) for (const f of document.querySelectorAll?.('iframe') || []) askHook(f); }
+  function askScan() { for (const f of document.querySelectorAll?.('iframe') || []) askHook(f); }
   // A thumb given before (or in an app opened outside the shell): the box's switch catalog, then the apps the App
   // Manager can't read itself, the same reads the counts use, kept on this device. At most every 10 minutes.
   async function askLook() {
@@ -1031,8 +1030,8 @@
       if (hit && askDue()) askOpen(hit);
     } catch (e) { /* no App Manager here: nothing to look at */ } finally { ask.busy = false; }
   }
-  function askArm() { if (!askOn()) return; askScan(); void askLook(); }
-  document.addEventListener?.('load', e => { if (e.target?.tagName === 'IFRAME' && askOn()) askHook(e.target); }, true);
+  function askArm() { askScan(); void askLook(); }
+  document.addEventListener?.('load', e => { if (e.target?.tagName === 'IFRAME') askHook(e.target); }, true);
   window.addEventListener?.('wos:experience', askArm);
   window.addEventListener?.('visibilitychange', () => { if (document.visibilityState !== 'hidden') askArm(); });
   window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, countsAsk: { get isOpen() { return !!ask.el; }, back: () => { void askDone(''); return 'feature-counts-ask'; }, open: askOpen, intercept: askIntercept }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };

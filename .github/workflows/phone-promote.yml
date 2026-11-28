@@ -8,8 +8,8 @@ name: Phone promote
 # that back. The same bytes, no rebuild.
 #
 # Needs no secret and no environment: the APK was signed by phone-release.yml; this only changes release flags with
-# github.token. Off by default, like the tester lane: nothing happens until the repository variable
-# WOS_RELEASE_LANES=on. Run workflow on main promotes right away when one is due.
+# github.token. On for everyone (wizard-os#720 approved; no repository variable). Run workflow on main promotes right
+# away when one is due.
 on:
   schedule:
     - cron: '17 */6 * * *'
@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   promote:
-    if: vars.WOS_RELEASE_LANES == 'on' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

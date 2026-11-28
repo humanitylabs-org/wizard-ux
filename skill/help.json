@@ -438,10 +438,6 @@
       "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
       "when": "phone only"
     },
-    "wizard/app-picker-store-search": {
-      "help": "Add an app's search also finds App Store apps.",
-      "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
-    },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",
       "where": "Settings › Appearance › Try new features › Bottom app bar on desktop"
@@ -449,10 +445,6 @@
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
-    },
-    "wizard/feature-counts-ask": {
-      "help": "Shared only after you say Share.",
-      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
     },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
@@ -650,6 +642,8 @@
   },
   "retired": {
     "Backup health in Resources": "on for everyone: Home › Resources › Health shows your backup; Include it adds a left-out main agent.",
+    "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",
+    "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",
     "Result reader": "on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.",
     "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
     "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",

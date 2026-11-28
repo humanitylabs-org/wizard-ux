@@ -179,7 +179,7 @@ class PhoneReleaseTests(unittest.TestCase):
                     (d / 'wizard-os-0.10.14.apk').write_bytes(self.apk.read_bytes() if good_bytes else b'tampered')
                     release.write_json(d / 'phone.json', phone)
                 return unittest.mock.Mock(returncode=1 if argv[:3] == ['gh', 'release', 'view'] else 0)
-            states = iter([draft_state, dict(draft_state, isDraft=False)])
+            states = iter([draft_state, dict(draft_state, isDraft=False, isPrerelease=True)])
             with patch.object(release.subprocess, 'run', side_effect=fake_run), \
                     patch.object(release, 'text', side_effect=lambda *a, **k: release.json.dumps(next(states))):
                 try:
@@ -194,7 +194,8 @@ class PhoneReleaseTests(unittest.TestCase):
         self.assertNotIn('--latest', create)
         self.assertEqual(calls[-1][:3], ['gh', 'release', 'edit'])
         self.assertIn('--draft=false', calls[-1])
-        self.assertIn('--latest', calls[-1])
+        self.assertIn('--prerelease', calls[-1])
+        self.assertIn('--latest=false', calls[-1])
         captured = []
         with self.assertRaisesRegex(ValueError, 'bytes readback'):
             go(False, captured)
@@ -202,7 +203,7 @@ class PhoneReleaseTests(unittest.TestCase):
         self.assertFalse(any(c[:3] == ['gh', 'release', 'edit'] for c in captured), 'never published after a failed readback')
 
     def test_tester_lane_publishes_a_prerelease_never_latest(self):
-        # wizard-os#720: with release lanes on, the CI build is a prerelease that boxes (releases/latest) ignore.
+        # wizard-os#720: the CI build is a prerelease that boxes (releases/latest) ignore.
         phone = self.metadata()
         out = Path(self.temp.name)
         (out / 'wizard-os-0.10.14.apk').write_bytes(self.apk.read_bytes())
@@ -225,10 +226,10 @@ class PhoneReleaseTests(unittest.TestCase):
             with patch.object(release.subprocess, 'run', side_effect=fake_run), \
                     patch.object(release, 'text', side_effect=lambda *a, **k: release.json.dumps(next(states))):
                 if ok:
-                    release.draft(out, phone, publish=True, prerelease=True)
+                    release.draft(out, phone, publish=True)
                 else:
                     with self.assertRaisesRegex(ValueError, 'lane readback'):
-                        release.draft(out, phone, publish=True, prerelease=True)
+                        release.draft(out, phone, publish=True)
             edit = calls[-1]
             self.assertEqual(edit[:3], ['gh', 'release', 'edit'])
             self.assertIn('--prerelease', edit)
@@ -352,10 +353,11 @@ class PhoneReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'signer'):
             self.promote_fixture(audit_cert='Signer #1 certificate SHA-256 digest: ' + 'f' * 64 + '\n')
 
-    def test_promote_workflow_is_the_train_and_off_until_lanes_are_on(self):
+    def test_promote_workflow_is_the_train_and_always_on(self):
         root = Path(release.__file__).parent.parent
         wf = (root / '.github/workflows/phone-promote.yml').read_text()
-        self.assertIn("    if: vars.WOS_RELEASE_LANES == 'on' && github.ref == 'refs/heads/main'\n", wf)
+        self.assertIn("    if: github.ref == 'refs/heads/main'\n", wf)
+        self.assertNotIn('WOS_RELEASE_LANES', wf)
         self.assertIn("    - cron: '17 */6 * * *'\n", wf)
         self.assertNotIn('push:', wf)
         self.assertNotIn('secrets.', wf)
@@ -368,8 +370,10 @@ class PhoneReleaseTests(unittest.TestCase):
         self.assertNotIn('public-release', (root / '.github/CODEOWNERS').read_text())
         self.assertEqual(release.SOAK_HOURS, 72)
         _, jobs = self.ci_workflow_jobs()
-        self.assertIn('LANES: ${{ vars.WOS_RELEASE_LANES }}', jobs['publish'])
-        self.assertIn('if [ "$LANES" = on ]; then extra+=(--prerelease); fi', jobs['publish'])
+        # wizard-os#720 switch-default: lanes are on for everyone, no repository variable.
+        self.assertNotIn('WOS_RELEASE_LANES', jobs['publish'])
+        self.assertNotIn('--prerelease', jobs['publish'])
+        self.assertIn('tools/phone_release.py ci --publish', jobs['publish'])
 
     def test_ci_needs_a_rising_version_code(self):
         phone = self.metadata()
