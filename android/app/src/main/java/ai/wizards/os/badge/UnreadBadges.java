@@ -111,7 +111,7 @@ public final class UnreadBadges {
     }
 
     /**
-     * The badge look changed (wizard-ux issue 1669, switch wizard/phone-badge-look): redraw every mechanism with the
+     * The badge look changed (wizard-ux issue 1669, BadgeLook.upgrade): redraw every mechanism with the
      * newest known count. The count is unchanged, so the applied marks are dropped first or the sync would skip it.
      * No network; off the caller's thread (shortcut and widget IPC).
      */

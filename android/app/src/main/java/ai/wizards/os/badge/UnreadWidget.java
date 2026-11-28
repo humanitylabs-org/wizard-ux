@@ -31,7 +31,7 @@ public final class UnreadWidget extends AppWidgetProvider {
 
     static RemoteViews views(Context c, int count) {
         RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_messenger);
-        v.setImageViewBitmap(R.id.widget_icon, BadgeCompositor.compose(base(c), count, BadgeLook.style(c)));
+        v.setImageViewBitmap(R.id.widget_icon, BadgeCompositor.compose(base(c), count));
         Intent open = new Intent(c, AppSessionActivity.class).setAction(Intent.ACTION_VIEW)
                 .setData(HomeScreenShortcuts.taskUri(c, UnreadBadges.APP_ID))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT | Intent.FLAG_ACTIVITY_NEW_TASK);

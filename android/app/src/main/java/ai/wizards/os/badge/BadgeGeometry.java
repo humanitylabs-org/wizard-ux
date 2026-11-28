@@ -1,38 +1,16 @@
 package ai.wizards.os.badge;
 
-/** Bubble placement for an icon of side {@code size}: top-right, pill-shaped when the label is wider than tall. */
+/** Badge placement on an icon: top-right, pill-shaped when the label is wider than tall. */
 public final class BadgeGeometry {
-    public final float left, top, right, bottom, ring, textSize, textCenterX, textBaselineOffset;
-    private BadgeGeometry(float l, float t, float r, float b, float ring, float textSize, float cx, float baseline) {
-        left = l; top = t; right = r; bottom = b; this.ring = ring; this.textSize = textSize; textCenterX = cx; textBaselineOffset = baseline;
+    public final float left, top, right, bottom, textSize, textCenterX;
+    private BadgeGeometry(float l, float t, float r, float b, float textSize, float cx) {
+        left = l; top = t; right = r; bottom = b; this.textSize = textSize; textCenterX = cx;
     }
     public float width() { return right - left; }
     public float height() { return bottom - top; }
     public float radius() { return height() / 2f; }
 
-    /**
-     * @param size           icon side in px
-     * @param labelLength    characters in the label ("9", "9+")
-     * @param textWidth      measured width of the label at {@link #textSizeFor(int)}; 0 = estimate
-     */
-    public static BadgeGeometry compute(int size, int labelLength, float textWidth) {
-        float s = size;
-        float d = s * 0.40f;                         // bubble height
-        float ring = Math.max(1f, s * 0.035f);        // white edge so it reads on any icon
-        float inset = s * 0.02f + ring;               // keep the ring inside the bitmap
-        float ts = textSizeFor(size);
-        float w = textWidth > 0 ? textWidth : ts * 0.6f * labelLength;
-        float pad = d * 0.30f;
-        float width = Math.max(d, w + 2 * pad);
-        float right = s - inset, left = right - width, top = inset, bottom = top + d;
-        // Vertical centring: caller adds this to the bubble centre to get the text baseline.
-        float baseline = ts * 0.35f;
-        return new BadgeGeometry(left, top, right, bottom, ring, ts, (left + right) / 2f, baseline);
-    }
-
-    public static float textSizeFor(int size) { return size * 0.26f; }
-
-    /* ---- One UI look (wizard-ux issue 1669, switch wizard/phone-badge-look): no ring, about a third of the visible
+    /* ---- One UI look (wizard-ux issue 1669, on for everyone): no ring, about a third of the visible
      * tile in diameter, a circle for one character and a pill that grows leftwards for more, at the tile's top-right,
      * lifted off the tile by a faint shadow (issue 1960). ---- */
 
@@ -105,7 +83,7 @@ public final class BadgeGeometry {
             right = c + lo; top = c - lo;
         }
         float left = right - width, bottom = top + d;
-        return new BadgeGeometry(left, top, right, bottom, 0f, ts, (left + right) / 2f, ts * 0.35f);
+        return new BadgeGeometry(left, top, right, bottom, ts, (left + right) / 2f);
     }
 
     /** Is the pill [left, left + width] x [top, top + h] (ends rounded by h / 2), grown by {@code grow} on every side,
