@@ -246,7 +246,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
     // The same words sent again after an unfinished turn (see parseRows) are a quiet line, not a second bubble. It keeps
     // the message ids so going to that message (a quote's header, a tracker row) still lands on it.
     // The owner's reply-button taps (wizard-ux issue 1889, core/action-cards.js): a quiet machine line, never his words.
-    const RB = globalThis.WosActionCards?.replyOn?.() ? globalThis.WosActionCards : null;
+    const RB = globalThis.WosActionCards?.replyHtml ? globalThis.WosActionCards : null;
     const tapsIn = u => (RB && u ? u.taps || KIT.tapsOf?.(u.text)?.taps || [] : []); // a local copy still carries the raw text
     const taps = unsent ? [] : tapsIn(tn.u);
     if (taps.length) h += `<div class="ch-renamed ch-taps" data-rb-taps${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u, undefined, tt)}>${RB.tapLinesHtml(taps)}${isFinite(tn.u.at) ? `<span class="ch-rb-at">${esc(KIT.time.stamp(tn.u.at))}</span>` : ''}</div>`;
@@ -278,7 +278,7 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
       };
-      // Reply buttons (wizard-ux issue 1889): each group drawn where its line sits; off, the text keeps their labels.
+      // Reply buttons (wizard-ux issue 1889, on for everyone): each group drawn where its line sits.
       const rbBody = RB && !tn.a?.sweep && tn.a?.buttons?.length ? RB.replyHtml(tn.a.btext || tn.a.text, tn.a.buttons, t => md(t, mediaHook), c.rbPicks) : '';
       const sweep = tn.a?.sweep && typeof sweepHtml === 'function' ? sweepHtml(tn.a.sweep) : '';
       const body = sweep || (typeof rbBody === 'string' && rbBody) || (tn.a ? md(tn.a.text, (url, marker) => mediaHook(url, marker)) : '');

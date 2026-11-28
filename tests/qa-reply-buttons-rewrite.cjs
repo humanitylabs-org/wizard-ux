@@ -3,7 +3,7 @@
 // hidden "[reporter] ... Rewrite it now" row, then the rewrite with the same group) shows ONE text and ONE set of
 // buttons, from the rewrite. A tap made earlier on the original's message still shows as the pick; a tap on the survivor
 // sends the usual "Tapped ... · <group>" line and is picked again after a reload; a turn with two different group names
-// keeps both. Disposable synthetic box (nothing real read or written), switch wizard/reply-buttons on, phone 412x915 and
+// keeps both. Disposable synthetic box (nothing real read or written), reply buttons on for everyone, phone 412x915 and
 // desktop 1440x900, skins in QA_SKINS (default nebula,grove). QA_EXPECT=broken (QA_WEB=<main>/web) records main.
 // Screens in QA_OUT: <shell>-<skin>.png.
 const assert = require('node:assert/strict');
@@ -57,7 +57,7 @@ async function boot(browser, box, shell, entry) {
   await context.addInitScript(({ shell, on, skin }) => {
     if (window !== top) return;
     for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/reply-buttons': true } : {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
   }, { shell, on: SWITCH === 'on', skin: SKIN });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
