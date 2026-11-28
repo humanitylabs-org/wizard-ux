@@ -10,6 +10,7 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path');
+const { applyPanelOps } = require('./fixtures/qa-prefs-patch.cjs');
 const repo = path.resolve(__dirname, '..'), origin = 'https://apps-panel-agents.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'apps-panel-agents-evidence');
 const broken = process.env.QA_EXPECT === 'broken';
@@ -42,6 +43,11 @@ async function boot(browser, skin, prefs) {
       const abs = path.resolve(web, decodeURIComponent(p.slice(prefix.length) || 'index.html'));
       if (!abs.startsWith(path.resolve(web) + path.sep)) return r.abort();
       return fs.existsSync(abs) && fs.statSync(abs).isFile() ? r.fulfill({ path: abs }) : r.fulfill({ status: 404, body: 'none' });
+    }
+    // PATCH: the panel's item operations (wizard-ux#2047); a colon id is refused here too.
+    if (p === '/wizard/v1/ui-preferences' && method === 'PATCH') {
+      const next = applyPanelOps(prefs, JSON.parse(q.postData() || '{}').ops); if (!next) return r.fulfill({ status: 400, json: { error: 'invalid_preferences' } });
+      Object.assign(prefs, next); puts.push(next); return r.fulfill({ json: prefs });
     }
     if (p === '/wizard/v1/ui-preferences' && method === 'PUT') {
       const body = JSON.parse(q.postData() || '{}');

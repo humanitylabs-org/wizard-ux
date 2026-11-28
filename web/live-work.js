@@ -127,19 +127,25 @@ window.WizCore.liveParts.work = function ({ J, req }) {
    * whole cached list: a device that hadn't pulled yet used to erase another device's or an agent's edit (same bug
    * as pins, wizard-ux #670). Each edit is queued here (kept across reloads and offline spells), shown at once, and
    * sent as Agent Service PATCH operations, applied atomically to the stored lists. An older service (405) gets the
-   * same operations replayed onto a fresh read, written and read back. Pins keep their own queue (core/chat-pins.js). */
+   * same operations replayed onto a fresh read, written and read back (as does one whose PATCH predates the Apps panel's
+   * lists, 400). Pins keep their own queue (core/chat-pins.js). */
   const OPS_KEY = 'wos.prefs.ops.v1', SPACE_OP = /^spaces\/([a-z0-9-]{1,48})\/(threads|name)$/, WIZARD_OP = /^savedWizards\/([A-Za-z0-9._:-]{1,120})\/name$/;
   const opField = o => SPACE_OP.test(o.key) ? 'spaces' : WIZARD_OP.test(o.key) ? 'savedWizards' : o.key;
   const originOf = u => { try { return new URL(u).origin; } catch (e) { return ''; } };
   // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
   function applyPrefOps(prefs, ops) {
     const next = { ...prefs };
-    for (const { op, key, item, items } of ops) {
+    for (const { op, key, item, items, after } of ops) {
       const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
       const wiz = WIZARD_OP.exec(key);
       // Saved Wizards: adding is a no-op for an id or address already saved; renaming a forgotten one is a no-op.
       if (key === 'savedWizards') next.savedWizards = op === 'add' ? (list.some(w => w.id === item.id || (!!originOf(w.url) && originOf(w.url) === originOf(item.url))) ? list : list.concat(item)) : list.filter(w => w.id !== item);
       else if (wiz) next.savedWizards = list.map(w => w.id === wiz[1] ? { ...w, name: item } : w);
+      // The phone Apps panel's lists (wizard-ux#2047): add / remove one app id. Favorites also move one: it goes before the
+      // first of `items` (the apps that followed it on that device) still listed, else right after the first of `after`
+      // (those before it, nearest first), else last. Moving an app another device removed is a no-op.
+      else if (key === 'appFavorites' || key === 'appRecentHidden') next[key] = op === 'move' ? (list.includes(item) ? appMove(list, item, items, after) : list)
+        : op === 'add' ? (list.includes(item) ? list : list.length < 100 ? list.concat(item) : key === 'appRecentHidden' ? list.slice(1).concat(item) : list) : list.filter(x => x !== item);
       else if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
         : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
       else if (key === 'spaces') next.spaces = op === 'add' ? (list.some(s => s.id === item.id) ? list : list.map(s => (s.agent || 'hermes') === (item.agent || 'hermes') && s.threads.some(t => item.threads.includes(t)) ? { ...s, threads: s.threads.filter(t => !item.threads.includes(t)) } : s).concat(item)) : list.filter(s => s.id !== item);
@@ -152,6 +158,13 @@ window.WizCore.liveParts.work = function ({ J, req }) {
     }
     return next;
   }
+  function appMove(list, item, items, after) {
+    const rest = list.filter(x => x !== item), f = (items || []).find(x => rest.includes(x)), p = (after || []).find(x => rest.includes(x));
+    const at = f ? rest.indexOf(f) : p ? rest.indexOf(p) + 1 : rest.length;
+    return [...rest.slice(0, at), item, ...rest.slice(at)];
+  }
+  // An Agent Service from before these lists had item operations answers their PATCH with 400: replay them instead.
+  const APP_LISTS = new Set(['appFavorites', 'appRecentHidden']);
   const queuedOps = () => { try { const v = JSON.parse(localStorage.getItem(OPS_KEY) || '[]'); return Array.isArray(v) ? v.filter(o => o && typeof o.op === 'string' && typeof o.key === 'string') : []; } catch (e) { return []; } };
   const setQueue = ops => { try { localStorage.setItem(OPS_KEY, JSON.stringify(ops.slice(-200))); } catch (e) {} };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -163,9 +176,9 @@ window.WizCore.liveParts.work = function ({ J, req }) {
       const r = await ask(PREFS_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ops }) });
       if (r.status === 404) { prefsOff = true; return null; }
       if (r.ok) return await r.json();
-      if (r.status === 400) return 'invalid';
-      if (r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
-      patchOff = true;
+      if (r.status === 400 && !ops.some(o => APP_LISTS.has(o.key))) return 'invalid';
+      if (r.status !== 400 && r.status !== 405 && r.status !== 501) throw new Error('Preferences unavailable');
+      if (r.status !== 400) patchOff = true;
     }
     const fields = [...new Set(ops.map(opField))], get = async () => { const g = await ask(PREFS_URL, { cache: 'no-store' }); if (g.status === 404) prefsOff = true; if (!g.ok) throw new Error('Preferences unavailable'); return g.json(); };
     // Two devices can both read before either writes: read back, and replay onto the newer list if ours didn't stick.

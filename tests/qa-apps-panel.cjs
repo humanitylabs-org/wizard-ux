@@ -12,6 +12,7 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
+const { applyPanelOps } = require('./fixtures/qa-prefs-patch.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://apps-panel.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'apps-panel-evidence');
@@ -46,6 +47,12 @@ async function boot(browser, c, skin, prefs, { recent = RECENT, local = {} } = {
       const abs = path.resolve(web, decodeURIComponent(p.slice(prefix.length) || 'index.html'));
       if (!abs.startsWith(path.resolve(web) + path.sep)) return r.abort();
       return fs.existsSync(abs) && fs.statSync(abs).isFile() ? r.fulfill({ path: abs }) : r.fulfill({ status: 404, body: 'none' });
+    }
+    // PATCH: the Agent Service's item operations (wizard-ux#2047: the panel sends add / remove / move one app id);
+    // puts records the box after every write.
+    if (p === '/wizard/v1/ui-preferences' && method === 'PATCH') {
+      const next = applyPanelOps(prefs, JSON.parse(q.postData() || '{}').ops); if (!next) return r.fulfill({ status: 400, json: { error: 'invalid_preferences' } });
+      Object.assign(prefs, next); puts.push(JSON.parse(JSON.stringify(prefs))); return r.fulfill({ json: prefs });
     }
     if (p === '/wizard/v1/ui-preferences' && method === 'PUT') { const body = JSON.parse(q.postData() || '{}'); puts.push(body); Object.assign(prefs, body); return r.fulfill({ json: prefs }); }
     if (!['GET', 'HEAD'].includes(method)) return r.fulfill({ json: { ok: true, state: { initializedAt: 1, threads: {} } } });
