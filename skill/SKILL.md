@@ -162,6 +162,7 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device.
 
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
+- **Archive stays archived**: Archive stays archived: a chat comes back only on Restore, your own send, or a new agent message (tagged "Back: <agent> wrote").
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Buttons that tick things off in apps**: Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.

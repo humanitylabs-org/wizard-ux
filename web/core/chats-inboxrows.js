@@ -149,7 +149,9 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     return ibRow({ key: `row:${esc(s.id)}`, wrap: `${pin ? ' pinned' : ''}${sent ? ' ch-st-wrap' : ''}`, cls: `${unread ? ' unread' : ''}${m === 'needs' ? ' needs' : ''}${sent ? ' ch-st-row' : ''}`, open: `data-chopen="${esc(s.id)}"${sent ? ` data-chsentthread="${esc(sent.key)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10"`, tip: 'Open thread · hold or open the context menu for actions',
       av: f.av, from: esc(f.from), pin, time: esc(ago(LIVE.cardAt(s))), title: esc(s.title || 'New chat'), mark: ibMark(m),
       // A saved, unsent draft says "✎ Draft" ahead of the line (wizard-ux issues 1445, 1604), as every Chats row does.
-      line: (typeof draftTag === 'function' ? draftTag(s) : '') + esc(clip(ibLine(s), 160)),
+      // Archive like TG style (wizard-ux issue 2063, switch wizard/archive-hold): a chat the agent brought back from the
+      // archive by writing in it says so until he opens it.
+      line: (LIVE.archiveBack?.(s) ? `<em class="ch-ib-back" data-archive-back>Back: ${esc(f.from || 'Wizard')} wrote</em> ` : '') + (typeof draftTag === 'function' ? draftTag(s) : '') + esc(clip(ibLine(s), 160)),
       after: `<button type="button" class="ch-ib-arch" data-chibarch="${esc(s.id)}" aria-label="Archive: ${esc(s.title || 'New chat')}" title="Archive">${IB_ARCH_SVG}</button>`, cur: !!chatVars.rowCur && chatVars.rowCur === s.id });
   }
   function ibRecRow(r) {
