@@ -991,7 +991,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         main.removeCallbacks(reachRetry);
         main.removeCallbacks(quietRetry);
         quietPending = false;
-        if (keepGuide) { android.util.Log.i("WizardOSReach", "painted " + pageUrl + " with Tailscale off: guide stays"); return; }
+        if (keepGuide) {
+            // The guide's own retries go on (a route that answers later still opens the Wizard).
+            android.util.Log.i("WizardOSReach", "painted " + pageUrl + " with Tailscale off: guide stays");
+            if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
+            return;
+        }
         if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
         if (reach != null) reach.hide();
     }
@@ -1303,6 +1308,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     };
 
     void netChanged() {
+        tailnetAsk++; // wizard-ux issue 2054: a health answer from before this change no longer speaks for the screen
         // Wizard-ux issue 2008: a quiet try is waiting and the network changed (the Tailscale tunnel came up): try now.
         if (reach != null && !reach.isOffline() && mainFailed && quietPending) {
             main.removeCallbacks(quietRetry); // still pending: it runs once the burst settles
@@ -1346,7 +1352,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 boolean off = ReachPolicy.tailscaleOffUnderPage(status, now);
                 if (off && !reach.isShowing() && resumed) showOffline(null);
                 // The guide kept over a painted page leaves once the box answers after all (Funnel, another route).
-                else if (guideUp && PinInstantPolicy.boxAnswers(status) && reach.isOffline()) reach.hide();
+                else if (guideUp && PinInstantPolicy.boxAnswers(status) && reach.isOffline() && reach.shown() == ReachPolicy.Why.TAILSCALE_OFF
+                        && now != ReachPolicy.Why.NO_NETWORK) reach.hide();
             });
         }, "reach-tailnet-check").start();
     };
