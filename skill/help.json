@@ -646,14 +646,14 @@
     "Get alerts in Chats or as badges?": "Settings › Notifications, per app; Notifications in Chats (Settings › Chats & app screens) must be on for Chats.",
     "Find a message that didn't send?": "Settings › Unsent & recovered.",
     "See AI usage or server load?": "Home's resource bars, or Settings › Resources.",
-    "See whether my backup is working?": "Home › Resources › Health has a Backup row: when the last backup ran, whether it was checked and how many are kept; amber or red with the reason in plain words when it is late, failed or left something out. If your main agent was left out, tap Include it there.",
+    "See whether my backup is working?": "Home › Resources › Health › Backup: last run, checked, kept; amber or red says why. Main agent left out: tap Include it.",
     "Add another Wizard?": "Settings › Connections › Wizards › Add a Wizard.",
     "Install an app?": "Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.",
     "See keyboard shortcuts?": "Desktop: ⌥/ or hold ⌥.",
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
-    "Backup health in Resources": "on for everyone, nothing to turn on: Home › Resources › Health shows this box's own backup (when it last ran, whether it was checked, warnings in plain words), and when a backup leaves your main agent out you are told once and Include it adds it after checking there is room on the disk.",
+    "Backup health in Resources": "on for everyone: Home › Resources › Health shows your backup; Include it adds a left-out main agent.",
     "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
     "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
