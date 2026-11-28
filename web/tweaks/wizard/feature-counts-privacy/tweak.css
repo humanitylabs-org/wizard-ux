@@ -1,0 +1,2 @@
+/* Share feature counts in Privacy (wizard-ux issue 2053): the move is in web/core/settings.js and web/core/privacy.js.
+ * Nothing in the shell's look changes. */

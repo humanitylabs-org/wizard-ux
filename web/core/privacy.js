@@ -251,6 +251,10 @@
   }
   try {
     window.WosSettings?.register?.({ id: 'private-mode', page: 'privacy', aliases: ['private-mode', 'privacy-check', 'private-ai'], html: pageHtml, act: () => false });
+    // Share feature counts with the team, below Private AI (wizard-ux issue 2053, switch wizard/feature-counts-privacy;
+    // row, state and prompt are core/settings.js countsPrivacy).
+    const fc = window.WosSettings?.countsPrivacy;
+    if (fc) window.WosSettings?.register?.({ id: 'feature-counts', page: 'privacy', aliases: ['feature-counts', 'share-feature-counts'], available: fc.available, html: fc.html, act: fc.act });
   } catch (e) { console.error(e); }
   window.WosPrivacy = {
     on, open, close, back: () => close() ? 'privacy' : '', read,

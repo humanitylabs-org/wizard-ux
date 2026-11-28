@@ -307,7 +307,9 @@
     if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
-    const exp = s.tweaks.filter(t => !t.builtin && !(E.desktopViews?.length && t.layout));
+    // Share feature counts lives in Settings › Privacy while wizard/feature-counts-privacy is on (wizard-ux issue 2053).
+    const moved = typeof countsInPrivacy === 'function' && countsInPrivacy();
+    const exp = s.tweaks.filter(t => !t.builtin && !(E.desktopViews?.length && t.layout) && !(moved && t.id === 'wizard/try-feature-counts'));
     const views = E.desktopViews || [];
     const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b></span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
@@ -327,7 +329,7 @@
     const features = testers ? cells.filter((_, i) => !list[i].view).join('') : '';
     // For everyone, or the channel not read yet: a switch that is on keeps its options, without the switch itself.
     const opts = testers ? '' : list.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
-    const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it.</p>${err}<div class="tw-list">${features}</div></div>` : '';
+    const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it${moved ? ' in Settings › Privacy' : ''}.</p>${err}<div class="tw-list">${features}</div></div>` : '';
     const optsHtml = opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : '';
     if (part === 'try') return tryNew || optsHtml ? `${tryNew}${optsHtml}` : '';
     if (part === 'look') return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${err}<div class="tw-list">${viewRows}</div></div>` : ''}`;
@@ -914,6 +916,19 @@
    * anonymous counts. A few seconds after start, then at most every 10 minutes while the shell is visible. */
   const COUNTS_TWEAK = 'wizard/try-feature-counts', COUNTS_EVERY = 10 * 60 * 1000, COUNT_APP = /^[a-z0-9][a-z0-9-]{0,62}$/;
   const counts = { at: 0, busy: false, timer: 0 };
+  /* Share feature counts in Settings › Privacy (wizard-ux issue 2053, switch wizard/feature-counts-privacy, off by
+   * default): a lasting privacy choice, not an experiment, so while the switch is on Try new features leaves it out
+   * (tweakRows above) and Privacy shows it as "Share feature counts with the team". Same switch, same stored choice
+   * (look.json tweaks), so every device keeps what it had and what is sent does not change; on still goes through the
+   * Share prompt (settingAct, askIntercept), off is one tap. On For everyone the counts switch stays locked off, so the
+   * row hides there. Registered by core/privacy.js, after Private AI. */
+  function countsInPrivacy() { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes('wizard/feature-counts-privacy'); } catch (e) { return false; } }
+  const countsItem = () => countsInPrivacy() ? window.WosExperience?.state?.tweaks?.find(t => t.id === COUNTS_TWEAK && !t.locked) || null : null;
+  const countsPrivacy = {
+    available: () => !!countsItem(),
+    html() { const t = countsItem(); return t ? `<div class="st-group" data-fc-privacy><h4>Feature counts</h4>${tweakSwitches([{ ...t, name: 'Share feature counts with the team' }], 'data-tweak-toggle', window.WosExperience.state.busy)}</div>` : ''; },
+    act: (ctx, el) => { const b = el.closest('[data-tweak-toggle]'); return b?.dataset.tweakToggle === COUNTS_TWEAK ? settingAct(ctx, el) : false; },
+  };
   const countsOn = () => { try { return String(document.documentElement?.dataset?.tweaks || '').split(' ').includes(COUNTS_TWEAK); } catch (e) { return false; } };
   async function countsListing(app) {
     for (const p of ['api/switches', 'api/view/switches']) {
@@ -968,7 +983,7 @@
     + `<p>Your thumbs up and down stay on this Wizard. You can also share them with the WizardOS team, so they see which test features people try and like.</p>`
     + `<p>If you choose Share, this Wizard sends only this, for each test feature you tried or gave a thumb:</p>`
     + `<ul><li>the feature’s switch id${example ? ` (this one is <code>${esc(example)}</code>)` : ''}</li><li>whether you tried it</li><li>your thumbs up or down</li><li>a random box id, so your Wizard is counted once</li></ul>`
-    + `<p>No names, messages or other content, and nothing that says who you are. Nothing is sent unless you choose Share. You can turn it off again in Settings, under Try new features (Share feature counts).</p>`
+    + `<p>No names, messages or other content, and nothing that says who you are. Nothing is sent unless you choose Share. You can turn it off again in Settings, ${countsInPrivacy() ? 'under Privacy (Share feature counts with the team)' : 'under Try new features (Share feature counts)'}.</p>`
     + `<div class="st-actions"><button type="button" class="ghost" data-fc-ask-no>Don’t share</button><button type="button" class="fc-ask-yes" data-fc-ask-yes>Share</button></div></section></div>`;
   function askOpen(example) {
     if (ask.el || !document.body) return false;
@@ -1034,5 +1049,5 @@
   document.addEventListener?.('load', e => { if (e.target?.tagName === 'IFRAME') askHook(e.target); }, true);
   window.addEventListener?.('wos:experience', askArm);
   window.addEventListener?.('visibilitychange', () => { if (document.visibilityState !== 'hidden') askArm(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, countsAsk: { get isOpen() { return !!ask.el; }, back: () => { void askDone(''); return 'feature-counts-ask'; }, open: askOpen, intercept: askIntercept }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, countsCollect, countsPrivacy, countsAsk: { get isOpen() { return !!ask.el; }, back: () => { void askDone(''); return 'feature-counts-ask'; }, open: askOpen, intercept: askIntercept }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

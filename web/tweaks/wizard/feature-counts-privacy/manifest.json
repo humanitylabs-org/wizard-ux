@@ -1,0 +1,14 @@
+{
+  "id": "wizard/feature-counts-privacy",
+  "name": "Share feature counts in Privacy",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#2053"
+  ],
+  "description": "Share feature counts is a lasting privacy choice, not an experiment: it moves out of Try new features into Settings › Privacy as \"Share feature counts with the team\", off until you say Share. Each device keeps its current choice and what is sent does not change."
+}
