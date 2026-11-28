@@ -466,9 +466,9 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                     final String u = req.getUrl().toString();
                     if (!u.equals(wantUrl)) { wantUrl = u; mainFailed = false; main.post(MainActivity.this::armReach); }
                 }
-                // Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): a pinned window's app
-                // files come from the phone (PinCache); null for anything it does not keep, which passes through as before.
-                else if (pinCache != null && PinInstant.on(MainActivity.this)) {
+                // Instant home-screen apps (wizard-ux issue 1830): a pinned window's app files come from the phone
+                // (PinCache); null for anything it does not keep, which passes through as before.
+                else if (pinCache != null) {
                     PinCache.Reply kept = pinCache.answer(req.getUrl().toString(), req.getMethod(), false, req.getRequestHeaders());
                     if (kept != null) return PinInstant.response(kept);
                 }
@@ -904,7 +904,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         // Instant home-screen apps (wizard-ux issue 1830, field report 1): a pinned window shows Can't reach only when the
         // box truly doesn't answer. At the mark the phone asks the box's own health check; a box that answers is only
         // slow (a cold load right after a deploy), so the window keeps waiting and asks again at the next mark.
-        if (this instanceof AppSessionActivity && PinInstant.on(this) && !mainFailed) { giveUpUnlessAnswering(); return; }
+        if (this instanceof AppSessionActivity && !mainFailed) { giveUpUnlessAnswering(); return; }
         showOffline(null);
     };
 
@@ -999,7 +999,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (reach != null && ReachPolicy.answerHides(reach.isShowing(), reach.isOffline())) reach.hide();
     }
 
-    /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default) ----
+    /* ---- Instant home-screen apps (wizard-ux issue 1830, on for everyone) ----
      * A pinned window's file cache (PinCache, asked from shouldInterceptRequest) and the app's last screen: saved when
      * the window leaves the screen, shown at the next cold open over the WebView (under the connection screen) until the
      * pinned page says the app has loaded (WizardOSNative.pinShown), a connection screen shows, or SHOT_MAX_MS. */
@@ -1031,7 +1031,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     void pinShotStart() {
         pinCreateAt = android.os.SystemClock.uptimeMillis();
-        if (!PinInstant.on(this)) return;
         final String origin = ai.wizards.os.device.AppState.origin(this), app = HomeScreenShortcuts.appId(this, getIntent());
         final android.content.Context ctx = getApplicationContext();
         pinShotLoad = new java.util.concurrent.FutureTask<>(() -> PinInstant.shot(ctx, origin, app));
@@ -1174,7 +1173,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
 
     /** Leaving the screen: keep a picture of the app as it is now, for the next cold open (only a loaded app page). */
     private void pinShotSave() {
-        if (web == null || root == null || !pinPageShown || pinShot != null || (reach != null && reach.isShowing()) || !PinInstant.on(this)) return;
+        if (web == null || root == null || !pinPageShown || pinShot != null || (reach != null && reach.isShowing())) return;
         final String app = HomeScreenShortcuts.appId(this, getIntent());
         final int w = web.getWidth(), h = web.getHeight();
         if (app == null || w <= 0 || h <= 0) return;
@@ -2179,12 +2178,13 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (MainActivity.this instanceof AppSessionActivity) return;
             AppLocation.forgetSwitch(MainActivity.this);
         }
-        /* ---- Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default): the main
-         * page copies the switch here (PinInstant); a pinned page says its shell release and when its app has loaded. ---- */
+        /* ---- Instant home-screen apps (wizard-ux issue 1830, on for everyone): a pinned page says its shell release and
+         * when its app has loaded. The main page still calls pinInstantSwitch(true) for Phone 0.10.72 to 0.10.83, which
+         * kept a copy of the old switch; here it only removes that copy once. ---- */
         @JavascriptInterface
         public void pinInstantSwitch(boolean on) {
             if (MainActivity.this instanceof AppSessionActivity) return;
-            PinInstant.setOn(MainActivity.this, on);
+            PinInstant.forgetSwitch(MainActivity.this);
         }
         @JavascriptInterface
         public void pinRelease(String token) {

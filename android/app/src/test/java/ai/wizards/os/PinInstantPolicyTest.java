@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
 
-/** Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open). */
+/** Instant home-screen apps (wizard-ux issue 1830, on for everyone). */
 public class PinInstantPolicyTest {
     private static final String BOX = "https://box.example.ts.net";
     private static final String HTML = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -19,20 +19,18 @@ public class PinInstantPolicyTest {
     }
 
     @Test
-    public void connectingIsSkippedOnlyWhenOnReachedRecentlyAndOnTheSameNetwork() {
+    public void connectingIsSkippedOnlyWhenReachedRecentlyAndOnTheSameNetwork() {
         long now = 1_000_000_000L;
-        assertTrue(PinInstantPolicy.skipConnecting(true, now, now - 60_000L, "101|vpn", "101|vpn"));
-        assertTrue(PinInstantPolicy.skipConnecting(true, now, now - PinInstantPolicy.REACHED_MS, "101|vpn", "101|vpn"));
-        // Switch off: today's Connecting, always.
-        assertFalse(PinInstantPolicy.skipConnecting(false, now, now - 1_000L, "101|vpn", "101|vpn"));
+        assertTrue(PinInstantPolicy.skipConnecting(now, now - 60_000L, "101|vpn", "101|vpn"));
+        assertTrue(PinInstantPolicy.skipConnecting(now, now - PinInstantPolicy.REACHED_MS, "101|vpn", "101|vpn"));
         // Too long ago, never reached, or a clock that went backwards.
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, now - PinInstantPolicy.REACHED_MS - 1, "101|vpn", "101|vpn"));
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, 0, "", "101|vpn"));
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, now + 5_000L, "101|vpn", "101|vpn"));
+        assertFalse(PinInstantPolicy.skipConnecting(now, now - PinInstantPolicy.REACHED_MS - 1, "101|vpn", "101|vpn"));
+        assertFalse(PinInstantPolicy.skipConnecting(now, 0, "", "101|vpn"));
+        assertFalse(PinInstantPolicy.skipConnecting(now, now + 5_000L, "101|vpn", "101|vpn"));
         // The network or the VPN changed (Tailscale turned off, Wi-Fi to mobile data), or there is no network now.
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, now - 1_000L, "101|vpn", "101|direct"));
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, now - 1_000L, "101|vpn", "102|vpn"));
-        assertFalse(PinInstantPolicy.skipConnecting(true, now, now - 1_000L, "", ""));
+        assertFalse(PinInstantPolicy.skipConnecting(now, now - 1_000L, "101|vpn", "101|direct"));
+        assertFalse(PinInstantPolicy.skipConnecting(now, now - 1_000L, "101|vpn", "102|vpn"));
+        assertFalse(PinInstantPolicy.skipConnecting(now, now - 1_000L, "", ""));
     }
 
     @Test

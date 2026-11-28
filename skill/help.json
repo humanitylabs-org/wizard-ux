@@ -401,10 +401,6 @@
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
       "where": "Settings › Appearance › Try new features › Buttons that tick things off in apps"
     },
-    "wizard/pin-instant-open": {
-      "help": "Android: pinned app icons open at once on their last screen.",
-      "where": "Settings › Appearance › Try new features › Instant home-screen apps"
-    },
     "wizard/phone-recovery-mode": {
       "help": "Android: a frozen start reopens in recovery mode.",
       "where": "Settings › Appearance › Try new features › Phone recovery mode"
@@ -654,6 +650,7 @@
     "Wizard for Mac in About & updates": "on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
     "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected.",
-    "One UI icon count": "on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner."
+    "One UI icon count": "on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner.",
+    "Instant home-screen apps": "on for everyone: Android home-screen app icons open at once on their last screen, without Connecting."
   }
 }

@@ -158,25 +158,11 @@
    * this Wizard's address. Android apps 0.10.69 to 0.10.81 still keep a copy of the old switch wizard/app-location, so
    * the main page tells them it is on; newer ones have no switch and ignore the call. */
   try { const n = window.WizardOSNative; if (n && typeof n.appLocationSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.appLocationSwitch(true); } catch (_) {}
-  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default). A home-screen app
-   * window is a new Android window with its own page, so the Android app does the work (PinInstant): skip Connecting
-   * when Wizard was just reached, show the app's last screen at once, keep app files on the phone. The main page copies
-   * the switch there; off once settled. */
-  const PIN_SWITCH = 'wizard/pin-instant-open';
-  let pinWas = null;
-  function pinSync() {
-    const n = window.WizardOSNative; if (!n || typeof n.pinInstantSwitch !== 'function' || window.WizHomeScreenPolicy?.mode) return;
-    let on = false; try { on = (document.documentElement.dataset.tweaks || '').split(' ').includes(PIN_SWITCH); } catch (_) {}
-    if (!on && !switchesSettled) return;
-    if (on === pinWas) return;
-    pinWas = on; try { n.pinInstantSwitch(on); } catch (_) {}
-  }
-  if (typeof MutationObserver === 'function' && document.documentElement) {
-    new MutationObserver(() => pinSync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-  }
-  window.addEventListener('wos:experience', () => { pinSync(); });
-  setTimeout(() => { switchesSettled = true; pinSync(); }, 5000);
-  pinSync();
+  /* Instant home-screen apps (wizard-ux issue 1830, on for everyone). A home-screen app window is a new Android window
+   * with its own page, so the Android app does the work (PinInstant): skip Connecting when Wizard was just reached, show
+   * the app's last screen at once, keep app files on the phone. Android apps 0.10.72 to 0.10.83 still keep a copy of the
+   * old switch wizard/pin-instant-open, so the main page tells them it is on; newer ones have no switch and ignore the call. */
+  try { const n = window.WizardOSNative; if (n && typeof n.pinInstantSwitch === 'function' && !window.WizHomeScreenPolicy?.mode) n.pinInstantSwitch(true); } catch (_) {}
   /* One UI-style icon count (wizard-ux issue 1669, on for everyone). The Messenger home-screen icon's count is drawn
    * by the Android app (badge/BadgeLook): exact digits up to 999 in a ringless orange-red badge at the tile's corner.
    * Android apps 0.10.70 to 0.10.82 still wait to be told it is on (they kept a copy of the old switch

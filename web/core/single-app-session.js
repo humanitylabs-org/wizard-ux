@@ -161,10 +161,10 @@
     return true;
   };
   let mountGeneration = 0;
-  /* Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open): the Android app holds the switch
-   * (the main page copies it there) and does the work. This page only tells it which shell release it runs (so the
-   * shell files the app loads are kept per release) and when the app's page has loaded (so the saved picture of the
-   * app's last screen can give way to it). Off, or an older Android app: the calls are not there or do nothing. */
+  /* Instant home-screen apps (wizard-ux issue 1830, on for everyone): the Android app does the work. This page only
+   * tells it which shell release it runs (so the shell files the app loads are kept per release) and when the app's
+   * page has loaded (so the saved picture of the app's last screen can give way to it). An older Android app without
+   * the calls: they are not there and nothing happens. */
   const pinNative = (name, ...args) => { try { const n = window.WizardOSNative; if (n && typeof n[name] === 'function') n[name](...args); } catch (_) {} };
   try { const release = document.querySelector('meta[name="wos-release"]')?.content || ''; if (/^[0-9a-f]{12}$/.test(release)) pinNative('pinRelease', release); } catch (_) {}
   function pinShown() { (window.requestAnimationFrame || (f => setTimeout(f, 16)))(() => setTimeout(() => pinNative('pinShown'), 120)); }
