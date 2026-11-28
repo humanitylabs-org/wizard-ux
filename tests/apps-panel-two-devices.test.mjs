@@ -64,3 +64,15 @@ test('every phone shows what the box holds after a pull; an agent id is stored a
   const other = liveDevice(box, { [FAV]: '[]' }); await tick(); await other.pullPrefs(); await tick();
   assert.deepEqual(JSON.parse(other.store.get(FAV)), ['music', 'agent.claude']);
 });
+
+test('a drag sends both neighbours, so a batch resent after a lost answer lands the same way twice', async () => {
+  const box = await stale({ initial: { appFavorites: ['music', 'notes'] }, local: { [FAV]: JSON.stringify(['music', 'notes']) },
+    first: async () => {}, second: async () => {} });
+  const d = liveDevice(box, { [FAV]: JSON.stringify(['music', 'notes']) }); await tick();
+  const sent = []; const prefOps = d.prefOps; d.prefOps = ops => { sent.push(...JSON.parse(JSON.stringify(ops))); return prefOps(ops); };
+  phone(d).A.moveFav('music', ''); await done(d);
+  assert.deepEqual(sent, [{ op: 'move', key: 'appFavorites', item: 'music', items: [], after: ['notes'] }]);
+  const batch = [...sent, { op: 'add', key: 'appFavorites', item: 'maps' }], once = d.applyPrefOps({ appFavorites: ['music', 'notes'] }, batch);
+  assert.deepEqual([...once.appFavorites], ['notes', 'music', 'maps']);
+  assert.deepEqual([...d.applyPrefOps(once, batch).appFavorites], [...once.appFavorites]);
+});

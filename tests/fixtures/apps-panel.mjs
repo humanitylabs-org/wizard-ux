@@ -56,4 +56,3 @@ export function harness({ sections = true, current = 'apps', front = 'notes', re
   return { api, A: { ...A, favorites: () => clone(A.favorites()), recent: () => clone(A.recent()), nine: () => clone(A.nine()), stepList: () => clone(A.stepList()) },
     click, rows, q, puts, opened, toasts, local, store, appVars, ctx, panel };
 }
-

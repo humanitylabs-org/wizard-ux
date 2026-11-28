@@ -135,16 +135,16 @@ window.WizCore.liveParts.work = function ({ J, req }) {
   // The same operations as Agent Service applies (server/ui-preferences.mjs applyUiPreferenceOps); each is idempotent.
   function applyPrefOps(prefs, ops) {
     const next = { ...prefs };
-    for (const { op, key, item, items } of ops) {
+    for (const { op, key, item, items, after } of ops) {
       const sub = SPACE_OP.exec(key), list = Array.isArray(next[opField({ key })]) ? next[opField({ key })] : [];
       const wiz = WIZARD_OP.exec(key);
       // Saved Wizards: adding is a no-op for an id or address already saved; renaming a forgotten one is a no-op.
       if (key === 'savedWizards') next.savedWizards = op === 'add' ? (list.some(w => w.id === item.id || (!!originOf(w.url) && originOf(w.url) === originOf(item.url))) ? list : list.concat(item)) : list.filter(w => w.id !== item);
       else if (wiz) next.savedWizards = list.map(w => w.id === wiz[1] ? { ...w, name: item } : w);
       // The phone Apps panel's lists (wizard-ux#2047): add / remove one app id. Favorites also move one: it goes before the
-      // first of `items` (the apps that followed it on that device, in order) still on the list, else last. Moving an app
-      // another device removed is a no-op, so no edit brings it back.
-      else if (key === 'appFavorites' || key === 'appRecentHidden') next[key] = op === 'move' ? (list.includes(item) ? appMove(list, item, items) : list)
+      // first of `items` (the apps that followed it on that device) still listed, else right after the first of `after`
+      // (those before it, nearest first), else last. Moving an app another device removed is a no-op.
+      else if (key === 'appFavorites' || key === 'appRecentHidden') next[key] = op === 'move' ? (list.includes(item) ? appMove(list, item, items, after) : list)
         : op === 'add' ? (list.includes(item) ? list : list.length < 100 ? list.concat(item) : key === 'appRecentHidden' ? list.slice(1).concat(item) : list) : list.filter(x => x !== item);
       else if (key === 'pinnedChats' || key === 'subjectOrder') next[key] = op === 'front' ? [...new Set(items)].concat(list.filter(x => !items.includes(x))).slice(0, 60)
         : op === 'add' ? (list.includes(item) ? list : list.concat(item)) : list.filter(x => x !== item);
@@ -158,9 +158,10 @@ window.WizCore.liveParts.work = function ({ J, req }) {
     }
     return next;
   }
-  function appMove(list, item, after) {
-    const rest = list.filter(x => x !== item), next = (after || []).find(x => rest.includes(x)), at = next ? rest.indexOf(next) : -1;
-    return at < 0 ? rest.concat(item) : [...rest.slice(0, at), item, ...rest.slice(at)];
+  function appMove(list, item, items, after) {
+    const rest = list.filter(x => x !== item), f = (items || []).find(x => rest.includes(x)), p = (after || []).find(x => rest.includes(x));
+    const at = f ? rest.indexOf(f) : p ? rest.indexOf(p) + 1 : rest.length;
+    return [...rest.slice(0, at), item, ...rest.slice(at)];
   }
   // An Agent Service from before these lists had item operations answers their PATCH with 400: replay them instead.
   const APP_LISTS = new Set(['appFavorites', 'appRecentHidden']);

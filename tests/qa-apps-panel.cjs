@@ -12,6 +12,7 @@
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
+const { applyPanelOps } = require('./fixtures/qa-prefs-patch.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://apps-panel.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'apps-panel-evidence');
@@ -50,11 +51,8 @@ async function boot(browser, c, skin, prefs, { recent = RECENT, local = {} } = {
     // PATCH: the Agent Service's item operations (wizard-ux#2047: the panel sends add / remove / move one app id);
     // puts records the box after every write.
     if (p === '/wizard/v1/ui-preferences' && method === 'PATCH') {
-      for (const o of JSON.parse(q.postData() || '{}').ops || []) {
-        const had = Array.isArray(prefs[o.key]) ? prefs[o.key] : [], l = had.filter(x => x !== o.item), n = (o.items || []).find(x => l.includes(x));
-        prefs[o.key] = o.op === 'remove' ? l : o.op === 'add' ? (had.includes(o.item) ? had : l.concat(o.item)) : !had.includes(o.item) ? had : n ? [...l.slice(0, l.indexOf(n)), o.item, ...l.slice(l.indexOf(n))] : l.concat(o.item);
-      }
-      puts.push(JSON.parse(JSON.stringify(prefs))); return r.fulfill({ json: prefs });
+      const next = applyPanelOps(prefs, JSON.parse(q.postData() || '{}').ops); if (!next) return r.fulfill({ status: 400, json: { error: 'invalid_preferences' } });
+      Object.assign(prefs, next); puts.push(JSON.parse(JSON.stringify(prefs))); return r.fulfill({ json: prefs });
     }
     if (p === '/wizard/v1/ui-preferences' && method === 'PUT') { const body = JSON.parse(q.postData() || '{}'); puts.push(body); Object.assign(prefs, body); return r.fulfill({ json: prefs }); }
     if (!['GET', 'HEAD'].includes(method)) return r.fulfill({ json: { ok: true, state: { initializedAt: 1, threads: {} } } });

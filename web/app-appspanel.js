@@ -35,7 +35,8 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   // this phone's whole cached list: a phone that had not pulled used to erase another phone's edit.
   const apWrite = (k, field, list, op) => {
     list = [...new Set(list.filter(x => typeof x === 'string').map(apKey).filter(x => AP_ID.test(x)))].slice(0, 100); try { localStorage.setItem(k, JSON.stringify(list)); } catch (_) {}
-    op = { ...op, key: field, item: apKey(op.item) }; if (op.items) op.items = [...new Set(op.items.map(apKey))].filter(x => AP_ID.test(x)).slice(0, 100);
+    const ids = l => [...new Set(l.map(apKey))].filter(x => AP_ID.test(x)).slice(0, 100);
+    op = { ...op, key: field, item: apKey(op.item) }; if (op.items) op.items = ids(op.items); if (op.after) op.after = ids(op.after);
     if (AP_ID.test(op.item)) LIVE?.prefOps?.([op]);
   };
   // What the panel lists: things you open and use, sorted the launcher's way (WosAppKinds): Apps, In development and
@@ -229,7 +230,8 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
     const shown = order.filter(x => x !== id), at = before ? shown.indexOf(before) : -1;
     shown.splice(at < 0 ? shown.length : at, 0, id);
     const mine = new Set(shown), rest = raw.filter(x => !mine.has(x)), all = [...shown, ...rest];
-    apWrite(AP_FAV, 'appFavorites', all, { op: 'move', item: id, items: all.slice(all.indexOf(id) + 1) });
+    // Both neighbours, so sending it twice (a lost answer) lands it in the same place.
+    apWrite(AP_FAV, 'appFavorites', all, { op: 'move', item: id, items: all.slice(all.indexOf(id) + 1), after: all.slice(0, all.indexOf(id)).reverse() });
   }
   apEl.addEventListener('pointerup', apDragEnd); apEl.addEventListener('pointercancel', apDragEnd);
   // Swipe the panel right or down (from the top of its list) to close it.
