@@ -1217,3 +1217,5 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[hidden] { display: 
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chan:has(> .ch-side-run) { flex: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel:has(> .aad-chan:not([hidden]) > .ch-side-run) > .aad-scroll { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel > .aad-chan .ch-list.ch-side.ch-side-run > .ch-scroll { display: block; flex: 1; min-height: 0; overflow-y: auto; }
+/* New chat quick links (wizard-ux issue 1965): the AI apps desktop centres the message box; the chips line up with it. */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-quick { width: min(768px, calc(100% - 48px)); margin: 0 auto; padding: 0 0 10px; }

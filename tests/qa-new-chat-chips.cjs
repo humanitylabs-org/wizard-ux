@@ -1,8 +1,8 @@
 'use strict';
-// wizard-ux issue 1965 in a real browser (switch wizard/new-chat-chips): a new, empty chat shows a row of quick-link chips
+// wizard-ux issue 1965 in a real browser (on for everyone; switch wizard/new-chat-chips removed): a new, empty chat shows a row of quick-link chips
 // right above the message box, in this order: Catch me up, What's waiting on me, Plan my day. One tap sends that chip's
 // prompt as the owner's message at once (no draft, no confirm), and the chips are gone once the chat has a message. A chat
-// that already has messages never shows them, and with the switch off nothing changes. Checked on the phone (412 px) and
+// that already has messages never shows them, and a device that saved the old switch as off shows them too. Checked on the phone (412 px) and
 // the AI apps desktop, in two skins. Synthetic transport only (no box is reached; writes are answered in memory).
 // QA_EXPECT=broken (with QA_WEB=<main>/web) asserts the baseline instead: no chips in a new chat.
 const assert = require('node:assert/strict');
@@ -13,14 +13,14 @@ const repo = path.resolve(__dirname, '..'), origin = 'https://new-chat-chips.tes
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'new-chat-chips-evidence');
 const broken = process.env.QA_EXPECT === 'broken', SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 const SHELLS = (process.env.QA_SHELLS || 'phone,desktop').split(',');
-const SWITCH = 'wizard/new-chat-chips';
+const OLD_SWITCH = 'wizard/new-chat-chips'; // removed; a saved choice for it must change nothing
 const CHIPS = [['Catch me up', 'catch me up'], ['What’s waiting on me', "What's waiting on me?"], ['Plan my day', 'Plan my day']];
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
 const ROWS = [{ id: 'qa-old', title: 'Weekend plans', at: now - 6e5 }].map(s => ({ id: s.id, title: s.title, runtime: 'direct', status: 'completed', updated_at: iso(s.at), updatedAt: iso(s.at), last_active: s.at / 1000, message_count: 2, messageCount: 2, preview: 'Done.' }));
 const report = [];
 
-async function setup(browser, skin, phone, on) {
+async function setup(browser, skin, phone, staleOff) {
   const context = await browser.newContext(phone
     ? { viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' }
     : { viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
@@ -31,7 +31,7 @@ async function setup(browser, skin, phone, on) {
     const shell = phone ? { 'wos.shell': 'phone', 'wux.shell': 'phone' } : { 'wos.shell': 'desktop', 'wux.shell': 'desktop', 'wos.desktop-view.v1': 'ai-apps' };
     for (const [k, v] of Object.entries({ ...shell, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin, 'wos.channel.v1': 'latest',
       'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v);
-  }, { skin, phone, mix: on ? { [SWITCH]: true } : {} });
+  }, { skin, phone, mix: staleOff ? { [OLD_SWITCH]: false } : {} });
   const prefs = { migrations: { 'launcher-seed-v1': true } }, posts = [];
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
@@ -88,14 +88,14 @@ const sends = posts => posts.filter(x => x.body && typeof x.body === 'object' &&
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const skin of SKINS) for (const phone of SHELLS.map(s => s === 'phone')) for (const on of broken ? [true] : [false, true]) {
-      const stem = `${phone ? 'phone' : 'ai-apps'}-${skin}-${on ? 'on' : 'off'}${broken ? '-before' : ''}`, entry = { stem }; report.push(entry);
-      const { context, page, errors, posts } = await setup(browser, skin, phone, on);
+    for (const skin of SKINS) for (const phone of SHELLS.map(s => s === 'phone')) for (const staleOff of broken ? [false] : [false, true]) {
+      const stem = `${phone ? 'phone' : 'ai-apps'}-${skin}${staleOff ? '-saved-off' : ''}${broken ? '-before' : ''}`, entry = { stem }; report.push(entry);
+      const { context, page, errors, posts } = await setup(browser, skin, phone, staleOff);
       try {
         await openNew(page, phone);
         entry.empty = await chips(page);
         await page.screenshot({ path: path.join(out, stem + '-1-new-chat.png') });
-        if (broken || !on) { assert.equal(entry.empty.n, 0, `${stem}: no chips`); entry.pass = true; continue; }
+        if (broken) { assert.equal(entry.empty.n, 0, `${stem}: no chips`); entry.pass = true; continue; }
         assert.deepEqual(entry.empty.labels, CHIPS.map(c => c[0]), `${stem}: three chips in order`);
         assert.ok(entry.empty.aboveBox, `${stem}: chips sit right above the message box`);
         if (phone) assert.ok(entry.empty.minH >= 36, `${stem}: chips are big enough to tap`);

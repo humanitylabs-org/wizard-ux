@@ -59,17 +59,16 @@ window.WizCore.chatsParts.status = function ({ agentName, agentRec, AGS, esc, H,
     const hint = H.newChatKeys ? H.newChatKeys.map(k => `<span class="nc-key">${k.keys.map(x => `<kbd>${esc(x)}</kbd>`).join('')}<small>${esc(k.label)}</small></span>`).join('') : `<span class="nc-tip">${esc(H.newChatHint || 'Type below.')}</span>`;
     return `<div class="ch-newchat" role="note"><span class="nc-mark" aria-hidden="true"><i class="sgi ${priv ? 'sg-hat-private' : 'sg-hat'}"></i></span><b class="nc-hi">${esc(part)}${who ? `, ${esc(who)}` : ''}</b><span class="nc-sub">What should ${esc(agentName(TAG))} work on${priv ? ' privately' : ''}?</span><span class="nc-keys">${hint}</span></div>`;
   }
-  /* Quick links on a new chat (wizard-ux issue 1965, switch wizard/new-chat-chips, off): an ordered list of {label, prompt},
+  /* Quick links on a new chat (wizard-ux issue 1965, on for everyone): an ordered list of {label, prompt},
    * drawn right above the message box while the chat is new and empty. One tap sends the prompt as the owner's message
    * (core/chats-bind.js [data-chquick]); "catch me up" runs the built catch-up (wizard-agent-service issue 668) and the
-   * Agent Service tells the main agent how to answer the other two while the same switch is on. Add a chip here. */
+   * Agent Service tells every agent how to answer the other two. Add a chip here. */
   const QUICK_LINKS = [
     { label: 'Catch me up', prompt: 'catch me up' },
     { label: 'What’s waiting on me', prompt: "What's waiting on me?" },
     { label: 'Plan my day', prompt: 'Plan my day' },
   ];
-  const quickOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/new-chat-chips'); } catch (e) { return false; } };
-  const quickLinksHtml = () => (quickOn() ? `<div class="ch-quick" role="group" aria-label="Quick links">${QUICK_LINKS.map(q => `<button type="button" data-chquick="${esc(q.prompt)}">${esc(q.label)}</button>`).join('')}</div>` : '');
+  const quickLinksHtml = () => `<div class="ch-quick" role="group" aria-label="Quick links">${QUICK_LINKS.map(q => `<button type="button" data-chquick="${esc(q.prompt)}">${esc(q.label)}</button>`).join('')}</div>`;
   function skelThread() {
     return `<div class="ch-skel thread" role="status" aria-label="Loading thread…"><i class="ch-sk bub u" style="width:52%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:92%"></i><i class="ch-sk" style="width:84%"></i><i class="ch-sk" style="width:58%"></i></span><i class="ch-sk bub u" style="width:36%"></i><span class="ch-skel-a"><i class="ch-sk" style="width:88%"></i><i class="ch-sk" style="width:64%"></i></span></div>`;
   }

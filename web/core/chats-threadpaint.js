@@ -130,7 +130,7 @@ window.WizCore.chatsParts.threadpaint = function ({ ACT, actionLabel, agentName,
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    // Quick links (wizard-ux issue 1965, switch wizard/new-chat-chips): only on the main agent's new, empty chat (the
+    // Quick links (wizard-ux issue 1965, on for everyone): only on the main agent's new, empty chat (the
     // built catch-up is the main agent's), never over a notification, the Daily view, a reply or a private carry.
     const quick = isNew && !pend.length && !TAG && !NV && !DL && !rpl && !c.carry && !INC?.active?.(w.id) && typeof quickLinksHtml === 'function' ? quickLinksHtml() : '';
     const tacts = NV ? (NQ ? '' : noteTactsHtml(NV, false))
