@@ -377,10 +377,6 @@
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
     },
-    "wizard/result-reader": {
-      "help": "A private model files each finished background task.",
-      "where": "Settings › Appearance › Try new features › Result reader"
-    },
     "wizard/new-chat-chips": {
       "help": "A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.",
       "where": "Settings › Appearance › Try new features › New chat quick links"
@@ -441,10 +437,6 @@
       "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
       "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
       "when": "phone only"
-    },
-    "wizard/app-picker-store-search": {
-      "help": "Add an app's search also finds App Store apps.",
-      "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
     },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",
@@ -653,6 +645,8 @@
   },
   "retired": {
     "Ask before sharing feature counts": "on for everyone, nothing to turn on: Share feature counts stays off until you say Share to one prompt that names exactly what is sent (switch id, tried, thumbs, a random box id; no content, no identity). It opens the first time you tap a thumb in an app's Try new features, or when you turn Share feature counts on; Don't share keeps it off. Turning it off again is one tap in Settings › Appearance › Try new features.",
+    "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",
+    "Result reader": "on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.",
     "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
     "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",

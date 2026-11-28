@@ -161,7 +161,6 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device.
 
-- **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
 - **Backup health in Resources**: Resources shows your backup's health.
@@ -185,7 +184,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Repair the agent's Wizard connection**: If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.
-- **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
@@ -202,6 +200,8 @@ Switches that are ordinary settings or views, not tester switches:
 
 No longer switches (owners and old chats may still name them):
 - **Ask before sharing feature counts**: on for everyone, nothing to turn on: Share feature counts stays off until you say Share to one prompt that names exactly what is sent (switch id, tried, thumbs, a random box id; no content, no identity). It opens the first time you tap a thumb in an app's Try new features, or when you turn Share feature counts on; Don't share keeps it off. Turning it off again is one tap in Settings › Appearance › Try new features.
+- **Add an app: search the App Store too**: on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.
+- **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
 - **Install sheet recommends private AI**: on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.
 - **Agent access under the browser boundary**: on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
