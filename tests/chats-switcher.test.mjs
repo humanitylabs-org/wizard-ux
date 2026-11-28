@@ -53,7 +53,7 @@ function shell({ on = true, current = 'chats', recent = null, views = ['inbox', 
   const tile = { dataset: { sec: 'chats' }, setPointerCapture() {}, closest: s => s.includes('[data-sec="chats"]') ? tile : null, dock };
   const other = { dataset: { sec: 'home' }, closest: () => null, dock };
   const runTimers = () => { for (const t of timers.splice(0)) t.f?.(); };
-  return { api, S: ctx.window.WizCore.chatsSwitcher, calls, tile, other, dock, runTimers, back, setHot: k => { hotAt = k; }, setCur: k => { cur = k; }, recent: () => JSON.parse(local.get('wos.chats.switcher.v1') || '{}').recent || [], sheet: made[0], setSection: s => { section = s; } };
+  return { api, S: ctx.window.WizCore.chatsSwitcher, calls, tile, other, dock, runTimers, back, setHot: k => { hotAt = k; }, setCur: k => { cur = k; }, recent: () => JSON.parse(local.get('wos.chats.switcher.v1') || '{}').recent || [], sheet: made[0], setSection: s => { section = s; }, ctx };
 }
 
 test('without the four-section bar the Chats tile is today\'s (no sheet, nothing stopped, no stepper)', () => {
@@ -115,6 +115,18 @@ test('a sideways swipe on the Chats tile flips the last two views and never reac
   const one = shell({ recent: ['inbox'] });
   fire(one.tile, 'pointerdown', { clientX: 120, clientY: 880 }); fire(one.tile, 'pointerup', { clientX: 60, clientY: 880 });
   assert.deepEqual(one.calls.go, [], 'with one view used so far it does nothing');
+});
+
+test('with Apps in front a sideways swipe on the Chats tile steps one app through Recent, not the Chats flip (ux#1955)', () => {
+  const h = shell({ current: 'apps', recent: ['inbox', 'sent'] }), steps = [];
+  h.ctx.window.WizCore.appsPanel = { stepping: () => true, step: s => { steps.push(s); return true; } };
+  fire(h.tile, 'pointerdown', { clientX: 120, clientY: 880 }); fire(h.tile, 'pointerup', { clientX: 60, clientY: 880 });
+  fire(h.tile, 'pointerdown', { clientX: 120, clientY: 880 }); fire(h.tile, 'pointerup', { clientX: 180, clientY: 880 });
+  assert.deepEqual(steps, [1, -1], 'left: the next older app; right: back toward the newest');
+  assert.deepEqual(h.calls.go, [], 'Chats stays in its view'); assert.deepEqual(h.calls.sections, [], 'and Apps stays in front');
+  // From Home the tile's swipe is still the Chats flip.
+  h.setSection('home'); fire(h.tile, 'pointerdown', { clientX: 120, clientY: 880 }); fire(h.tile, 'pointerup', { clientX: 60, clientY: 880 });
+  assert.deepEqual(h.calls.go, ['sent']); assert.deepEqual(steps, [1, -1]);
 });
 
 test('the bar and the orb step one view at a time while Chats is in front, stopping at the ends', () => {

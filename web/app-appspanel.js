@@ -316,7 +316,7 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   new MutationObserver(() => { if (!apOn()) { apClose(); apGridClose(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-shell'] });
   apReady = true;
   // Read-only view for tests and QA.
-  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep });
+  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep, stepping: apStepping });
   // appsPanelOpen: the Apps tile's selector; false only before this part is ready (the Apps sheet opens then).
   const appsPanelOpen = () => apOpen();
   // The Apps tile tapped while the panel is up (or closed by this same finger): it goes away, nothing else happens.
