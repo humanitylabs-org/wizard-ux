@@ -32,7 +32,8 @@
     "wizard/phone-recovery-mode",
     "wizard/auto-tags",
     "wizard/catch-up-sent",
-    "wizard/feature-counts-privacy"
+    "wizard/feature-counts-privacy",
+    "wizard/reply-card"
   ],
   "defaults": [],
   "promotedDefaults": [],

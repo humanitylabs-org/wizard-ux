@@ -1,0 +1,2 @@
+/* One reply card (wizard-ux issue 2064): the card's look is in web/core/chats.css (.ch-rcard); its markup only exists
+ * while this switch is on, so nothing else changes here. */

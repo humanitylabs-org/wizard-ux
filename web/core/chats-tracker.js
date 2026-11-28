@@ -116,7 +116,10 @@ window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStat
   // name and time in the header, the note as the agent's first message, a muted 'From X · shows in Chats ▾' line with
   // the routing choices in a small menu (instead of the segmented control), 'Resolve' in place of 'Resolve this'.
   const noteQuiet = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-note-quiet').trim() === 'on'; } catch (_) { return false; } };
-  const summaryOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-summary').trim() === 'on'; } catch (_) { return false; } };
+  // One reply card (wizard-ux issue 2064, switch wizard/reply-card, off): the summary, its Needs you state, one Mark done
+  // and Show more / Show less in one card at the top of the reply (chats-attach.js turnHtml). The card is the summary, so
+  // with it on a long reply gets one even without Short answer first.
+  const summaryOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-summary').trim() === 'on' || (document.documentElement.dataset?.tweaks || '').split(' ').includes('wizard/reply-card'); } catch (_) { return false; } };
   const SUMMARY_WORDS = 120;
   const summaryOf = a => a && a.ask && !a.failed && a.final !== false && summaryOn() && String(a.plainText ?? a.text ?? '').split(/\s+/).filter(Boolean).length > SUMMARY_WORDS ? a.ask : '';
   // The short answer is the toggle: tap it and the full reply takes its place; Show less folds it back. Collapsed unless the
@@ -128,8 +131,9 @@ window.WizCore.chatsParts.tracker = function ({ agentName, agentRec, AGS, byStat
   const CHEV_SVG = '<svg class="rsum-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   const setSummaryOpen = (msg, open) => {
     msg.classList.toggle('rsum-open', open);
-    const lead = msg.querySelector('.bub > .rsum'), full = msg.querySelector('.bub > .rdet');
+    const lead = msg.querySelector('.bub > .rsum'), full = msg.querySelector('.bub > .rdet'), more = msg.querySelector('.bub > .ch-rcard [data-reply-summary]');
     if (lead) lead.hidden = open; if (full) full.hidden = !open;
+    if (more) { more.setAttribute('aria-expanded', String(open)); const t = more.querySelector('.ch-rcard-ml'); if (t) t.textContent = open ? 'Show less' : 'Show more'; }
   };
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => window.WosSkinHost?.snoozeOrder === 'last';
