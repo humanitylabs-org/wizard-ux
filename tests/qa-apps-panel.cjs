@@ -47,6 +47,15 @@ async function boot(browser, c, skin, prefs, { recent = RECENT, local = {} } = {
       if (!abs.startsWith(path.resolve(web) + path.sep)) return r.abort();
       return fs.existsSync(abs) && fs.statSync(abs).isFile() ? r.fulfill({ path: abs }) : r.fulfill({ status: 404, body: 'none' });
     }
+    // PATCH: the Agent Service's item operations (wizard-ux#2047: the panel sends add / remove / move one app id);
+    // puts records the box after every write.
+    if (p === '/wizard/v1/ui-preferences' && method === 'PATCH') {
+      for (const o of JSON.parse(q.postData() || '{}').ops || []) {
+        const had = Array.isArray(prefs[o.key]) ? prefs[o.key] : [], l = had.filter(x => x !== o.item), n = (o.items || []).find(x => l.includes(x));
+        prefs[o.key] = o.op === 'remove' ? l : o.op === 'add' ? (had.includes(o.item) ? had : l.concat(o.item)) : !had.includes(o.item) ? had : n ? [...l.slice(0, l.indexOf(n)), o.item, ...l.slice(l.indexOf(n))] : l.concat(o.item);
+      }
+      puts.push(JSON.parse(JSON.stringify(prefs))); return r.fulfill({ json: prefs });
+    }
     if (p === '/wizard/v1/ui-preferences' && method === 'PUT') { const body = JSON.parse(q.postData() || '{}'); puts.push(body); Object.assign(prefs, body); return r.fulfill({ json: prefs }); }
     if (!['GET', 'HEAD'].includes(method)) return r.fulfill({ json: { ok: true, state: { initializedAt: 1, threads: {} } } });
     if (p === '/wizard/v1/pages/wizard-look/look.json') return r.fulfill({ status: 404, json: { error: 'not_here' } });

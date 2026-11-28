@@ -1,65 +1,12 @@
 // wizard-ux issue 1955: the phone Apps tile's Favorites panel, the nine bubbles and the Recent step-through
 // (web/app-appspanel.js, on for everyone) run in node:vm against a fake page. Without the four-section bar (the desktop)
 // nothing opens, nothing steps and nothing is saved; on the phone the panel lists Favorites then Recent (four, not Favorites, × each),
-// search puts the best match first, the × and Favorites are saved to ui-preferences, opening an app puts it back on
+// search puts the best match first, the × and Favorites are saved to ui-preferences (one item operation each), opening an app puts it back on
 // Recent, the nine fill from recent then favorites (newest first), and a bar swipe steps one app and stops at the ends.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
 
-const src = readFileSync(new URL('../web/app-appspanel.js', import.meta.url), 'utf8');
-const kindsSrc = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
-
-function el() {
-  const kids = {};
-  const e = { listeners: {}, hidden: false, dataset: {}, style: { setProperty() {} }, innerHTML: '', value: '', scrollTop: 0, attrs: {},
-    classList: { set: new Set(), add(...c) { c.forEach(x => this.set.add(x)); }, remove(...c) { c.forEach(x => this.set.delete(x)); }, toggle(c, on) { if (on ?? !this.set.has(c)) this.set.add(c); else this.set.delete(c); }, contains(c) { return this.set.has(c); } },
-    addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, setAttribute(k, v) { this.attrs[k] = v; }, append() {}, blur() {},
-    querySelector(s) { return (kids[s] ||= el()); }, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, right: 400, bottom: 800, width: 400, height: 800 }) };
-  return e;
-}
-
-function harness({ sections = true, current = 'apps', front = 'notes', recent = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger'], favs = null, hidden = null, extra = [] } = {}) {
-  const local = new Map(), store = new Map([['recent', recent]]), puts = [], opened = [], toasts = [];
-  if (favs) local.set('wos.apps.favorites.v1', JSON.stringify(favs));
-  if (hidden) local.set('wos.apps.recentHidden.v1', JSON.stringify(hidden));
-  const ids = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger', 'files', 'books', 'zen-long-name'];
-  const APP = Object.fromEntries(ids.map(id => [id, { id, name: id[0].toUpperCase() + id.slice(1), desc: id === 'books' ? 'a calendar of reads' : '', url: `/${id}/`, kind: 'wizard' }]));
-  APP.wizard = { id: 'wizard', name: 'Chats', kind: 'chats' }; APP['app-store'] = { id: 'app-store', name: 'App Store', url: '/s/', kind: 'wizard' }; APP.agents = { id: 'agents', name: 'Agents', kind: 'wizard' };
-  APP.android = { id: 'android', name: 'Android thing', kind: 'native' };
-  for (const a of extra) APP[a.id] = a;
-  const root = { getAttribute: () => null }; // no tweak attribute: the panel needs no switch (wizard/apps-panel went)
-  const desks = [{ id: 'home', home: true, wins: [] }, { id: 'da', wins: ['w1'], focus: 'w1' }];
-  const appVars = { desks, W: { w1: { id: 'w1', app: 'frame', appId: front } }, idx: 1, sheet: null };
-  const device = el(), dock = el(), made = [];
-  const ctx = {
-    window: { WizCore: { appParts: {}, isMaintenanceApp: () => false,
-      phoneSections: { on: () => sections, current: () => current, sections: () => ({ apps: 'da' }), slotId: () => 'messenger' } } },
-    document: { documentElement: root, createElement: () => { const e = el(); made.push(e); return e; }, elementFromPoint: () => null },
-    localStorage: { getItem: k => local.has(k) ? local.get(k) : null, setItem: (k, v) => local.set(k, String(v)) },
-    MutationObserver: class { observe() {} }, addEventListener() {}, requestAnimationFrame: f => f(), setTimeout, clearTimeout, Date, Math, JSON, Object, Set, console,
-  };
-  ctx.window.window = ctx.window; vm.createContext(ctx);
-  vm.runInContext(kindsSrc, ctx); vm.runInContext(src, ctx);
-  const api = ctx.window.WizCore.appParts.appspanel({
-    $: s => s === '#dock' ? dock : null, APP, APPS: Object.values(APP), appVars, CHATS_APP: { id: 'wizard' }, device, esc: s => String(s),
-    ico: (t, c, a) => `<${t} class="${c}">${a.id}</${t}>`, LIVE: { putPrefs: p => puts.push(JSON.parse(JSON.stringify(p))) }, norm: s => String(s).toLowerCase(),
-    openApp: a => { opened.push(a.id); appVars.W.w1.appId = a.id; }, openStoreKind: k => opened.push('store:' + k), phoneBack: { watch() {} },
-    store: { get: (k, d) => store.has(k) ? JSON.parse(JSON.stringify(store.get(k))) : d, set: (k, v) => store.set(k, v) },
-    tapOpen: a => { opened.push('tap:' + a.id); store.set('recent', [a.id, ...(store.get('recent') || []).filter(x => x !== a.id)]); ctx.window.WizCore.appsPanelOpened(a.id); }, toast: (i, t) => toasts.push(t), vib() {},
-  });
-  const A = ctx.window.WizCore.appsPanel, clone = v => JSON.parse(JSON.stringify(v));
-  const panel = made.find(e => e.id === 'appsPanel');
-  // A tap in the panel: a button carrying these data-* keys.
-  const click = data => panel.listeners.click.forEach(f => f({ target: { closest: () => ({ dataset: data }) } }));
-  // The panel's rows top to bottom as the part painted them: headers, rows (x: with the Recent ×), the empty line.
-  const rows = () => [...panel.querySelector('[data-apbody]').innerHTML.matchAll(/class="ap-ht">([^<]*)|<div class="ap-row[^"]*" data-aprow="([^"]+)">(.*?)<\/div>|class="ap-empty">([^<]*)/gs)]
-    .map(m => m[1] ? 'h:' + m[1] : m[2] ? (m[3].includes('data-apx') ? 'x:' : '') + m[2] : 'empty:' + m[4]);
-  const q = v => { panel.querySelector('[data-apq]').value = v; panel.querySelector('[data-apq]').listeners.input?.forEach(f => f()); };
-  return { api, A: { ...A, favorites: () => clone(A.favorites()), recent: () => clone(A.recent()), nine: () => clone(A.nine()), stepList: () => clone(A.stepList()) },
-    click, rows, q, puts, opened, toasts, local, store, appVars, ctx, panel };
-}
+import { harness } from './fixtures/apps-panel.mjs';
 
 test('no switch: up on the phone bar for everyone; without the four-section bar nothing opens, steps or is saved', () => {
   assert.equal(harness().api.appsPanelOn(), true, 'no tweak attribute is needed');
@@ -82,9 +29,9 @@ test('Favorites then Recent: four recent apps that are not Favorites, newest fir
   // The × on Notes: off Recent (the next one moves up) and off this device's list, saved for the other devices.
   h.click({ apx: 'notes' });
   assert.deepEqual(h.rows().slice(3), ['h:Recent', 'x:podcasts', 'x:maps', 'x:messenger']);
-  assert.deepEqual(h.puts.at(-1), { appRecentHidden: ['notes'] }); assert.ok(!h.store.get('recent').includes('notes'));
+  assert.deepEqual(h.puts.at(-1), { op: 'add', key: 'appRecentHidden', item: 'notes' }); assert.deepEqual(JSON.parse(h.local.get('wos.apps.recentHidden.v1')), ['notes']); assert.ok(!h.store.get('recent').includes('notes'));
   // Edit, minus on Calendar; Add favorites, star Notes: the order is kept and saved each time.
-  h.click({ apedit: '' }); h.click({ apminus: 'calendar' }); assert.deepEqual(h.puts.at(-1), { appFavorites: ['gone-app', 'music'] });
+  h.click({ apedit: '' }); h.click({ apminus: 'calendar' }); assert.deepEqual(h.puts.at(-1), { op: 'remove', key: 'appFavorites', item: 'calendar' }); assert.deepEqual(JSON.parse(h.local.get('wos.apps.favorites.v1')), ['gone-app', 'music']);
   h.click({ apadd: '' }); h.click({ apstar: 'notes' }); h.click({ apdone: '' }); h.click({ apdone: '' });
   assert.deepEqual(h.A.favorites(), ['music', 'notes']);
   // Search: matching apps, the best (a name that starts with it) first, a description match last.
@@ -101,7 +48,7 @@ test('the × and Favorites are box preferences; opening an app again puts it bac
   const h = harness({ hidden: ['podcasts'] });
   assert.deepEqual(h.A.recent(), ['notes', 'music', 'calendar', 'maps'], 'a removal from another device hides it here');
   h.ctx.window.WizCore.appsPanelOpened('podcasts');
-  assert.deepEqual(h.puts.at(-1), { appRecentHidden: [] }, 'opened again: back on Recent on the box');
+  assert.deepEqual(h.puts.at(-1), { op: 'remove', key: 'appRecentHidden', item: 'podcasts' }, 'opened again: back on Recent on the box');
   assert.deepEqual(h.A.recent(), ['notes', 'music', 'calendar', 'podcasts']);
   h.ctx.window.WizCore.appsPanelOpened('notes');
   assert.equal(h.puts.length, 1, 'opening an app that was never removed saves nothing');
@@ -147,22 +94,22 @@ test('an agent\'s chats star, survive a reload from the box, land on Recent afte
   h.click({ apstar: 'agent:philosopher' });
   assert.deepEqual(h.A.favorites(), ['agent:philosopher'], 'the star sticks');
   // ui-preferences takes app ids without a colon: the box gets agent.philosopher.
-  assert.deepEqual(h.puts.at(-1), { appFavorites: ['agent.philosopher'] });
+  assert.deepEqual(h.puts.at(-1), { op: 'add', key: 'appFavorites', item: 'agent.philosopher' });
   // A reload, or another device, reading the box's list: still a Favorite.
-  const r = harness({ extra: [PHIL], favs: h.puts.at(-1).appFavorites });
+  const r = harness({ extra: [PHIL], favs: JSON.parse(h.local.get('wos.apps.favorites.v1')) });
   assert.deepEqual(r.A.favorites(), ['agent:philosopher']);
   r.api.appsPanelOpen(); assert.deepEqual(r.rows().slice(0, 2), ['h:Favorites', 'agent:philosopher']);
   // Reorder by drag keeps it, and the minus takes it off again.
-  r.click({ apedit: '' }); r.click({ apminus: 'agent:philosopher' }); assert.deepEqual(r.puts.at(-1), { appFavorites: [] });
+  r.click({ apedit: '' }); r.click({ apminus: 'agent:philosopher' }); assert.deepEqual(r.puts.at(-1), { op: 'remove', key: 'appFavorites', item: 'agent.philosopher' });
   // Opened from All apps: the panel closes, the tile opens (openApp → the agent's chats), and it is on Recent.
   const o = harness({ extra: [PHIL] }); o.api.appsPanelOpen(); o.click({ apall: '' });
   o.click({ apopen: 'agent:philosopher' });
   assert.equal(o.A.isOpen(), false); assert.deepEqual(o.opened, ['tap:agent:philosopher']);
   assert.equal(o.A.recent()[0], 'agent:philosopher');
   // Taken off Recent: stored for the box the same way, and back on Recent once opened again.
-  o.click({ apx: 'agent:philosopher' }); assert.deepEqual(o.puts.at(-1), { appRecentHidden: ['agent.philosopher'] });
+  o.click({ apx: 'agent:philosopher' }); assert.deepEqual(o.puts.at(-1), { op: 'add', key: 'appRecentHidden', item: 'agent.philosopher' });
   assert.ok(!o.A.recent().includes('agent:philosopher'));
-  o.ctx.window.WizCore.appsPanelOpened('agent:philosopher'); assert.deepEqual(o.puts.at(-1), { appRecentHidden: [] });
+  o.ctx.window.WizCore.appsPanelOpened('agent:philosopher'); assert.deepEqual(o.puts.at(-1), { op: 'remove', key: 'appRecentHidden', item: 'agent.philosopher' });
 });
 
 test('connectors are absent from search, All apps, Add favorites, Favorites, Recent and the nine; apps and agents stay', () => {

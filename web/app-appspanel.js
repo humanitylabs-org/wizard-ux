@@ -31,7 +31,13 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   const apKey = id => String(id).replace(/^agent:/, 'agent.'), apUnkey = k => String(k).replace(/^agent\./, 'agent:');
   const apRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string' && AP_ID.test(x)).map(apUnkey) : []; } catch (_) { return []; } };
   // This device at once, then the box for every device (live-work.js prefsFields keeps the copy in step).
-  const apWrite = (k, field, list) => { list = [...new Set(list.filter(x => typeof x === 'string').map(apKey).filter(x => AP_ID.test(x)))].slice(0, 100); try { localStorage.setItem(k, JSON.stringify(list)); } catch (_) {} LIVE?.putPrefs?.({ [field]: list }); };
+  // The box gets one item operation per edit (WizLive.prefOps add / remove / move one app id, wizard-ux#2047), never
+  // this phone's whole cached list: a phone that had not pulled used to erase another phone's edit.
+  const apWrite = (k, field, list, op) => {
+    list = [...new Set(list.filter(x => typeof x === 'string').map(apKey).filter(x => AP_ID.test(x)))].slice(0, 100); try { localStorage.setItem(k, JSON.stringify(list)); } catch (_) {}
+    op = { ...op, key: field, item: apKey(op.item) }; if (op.items) op.items = [...new Set(op.items.map(apKey))].filter(x => AP_ID.test(x)).slice(0, 100);
+    if (AP_ID.test(op.item)) LIVE?.prefOps?.([op]);
+  };
   // What the panel lists: things you open and use, sorted the launcher's way (WosAppKinds): Apps, In development and
   // each agent's chats; never Connectors or screenless agent apps (they stay in Get apps and Settings).
   function apOk() {
@@ -50,17 +56,17 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   const apIsFav = id => apFavs().includes(id);
   function apSetFav(id, on) {
     const raw = apRead(AP_FAV).filter(x => x !== id);
-    apWrite(AP_FAV, 'appFavorites', on ? [...raw, id] : raw); apPaint();
+    apWrite(AP_FAV, 'appFavorites', on ? [...raw, id] : raw, { op: on ? 'add' : 'remove', item: id }); apPaint();
   }
   function apDropRecent(id) {
-    apWrite(AP_HID, 'appRecentHidden', [...apRead(AP_HID), id]);
+    apWrite(AP_HID, 'appRecentHidden', [...apRead(AP_HID), id], { op: 'add', item: id });
     store.set('recent', store.get('recent', []).filter(x => x !== id)); // this device's own list too
     vib(6); apPaint();
   }
   // Opened again (from here or any other tile): it is a recent app again on every device.
   function apOpened(id) {
     if (!apReady || !apOn()) return;
-    const raw = apRead(AP_HID); if (raw.includes(id)) apWrite(AP_HID, 'appRecentHidden', raw.filter(x => x !== id));
+    const raw = apRead(AP_HID); if (raw.includes(id)) apWrite(AP_HID, 'appRecentHidden', raw.filter(x => x !== id), { op: 'remove', item: id });
   }
   window.WizCore.appsPanelOpened = apOpened;
 
@@ -212,10 +218,19 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   });
   const apDragEnd = e => {
     if (!apDrag || e.pointerId !== apDrag.id) return;
-    const list = apDrag.row.parentElement, order = [...list.children].map(r => r.dataset.aprow); apDrag.row.classList.remove('ap-dragging'); apDrag = null;
-    const raw = apRead(AP_FAV), shown = new Set(order); // favorites of apps not installed here keep their place at the end
-    apWrite(AP_FAV, 'appFavorites', [...order, ...raw.filter(x => !shown.has(x))]); vib(6); apPaint();
+    const list = apDrag.row.parentElement, order = [...list.children].map(r => r.dataset.aprow), id = apDrag.row.dataset.aprow; apDrag.row.classList.remove('ap-dragging'); apDrag = null;
+    apMoveFav(id, order[order.indexOf(id) + 1] || '', order); vib(6); apPaint();
   };
+  // Favorites: `id` now sits before `before` ('' = after the last one shown here). Favorites of apps not installed
+  // here keep their place at the end. The box is told which apps follow it, so a gap left by another phone's edit
+  // (one it removed meanwhile) still puts it in the right place.
+  function apMoveFav(id, before, order = apFavs().filter(x => x !== id)) {
+    const raw = apRead(AP_FAV); if (!raw.includes(id)) return;
+    const shown = order.filter(x => x !== id), at = before ? shown.indexOf(before) : -1;
+    shown.splice(at < 0 ? shown.length : at, 0, id);
+    const mine = new Set(shown), rest = raw.filter(x => !mine.has(x)), all = [...shown, ...rest];
+    apWrite(AP_FAV, 'appFavorites', all, { op: 'move', item: id, items: all.slice(all.indexOf(id) + 1) });
+  }
   apEl.addEventListener('pointerup', apDragEnd); apEl.addEventListener('pointercancel', apDragEnd);
   // Swipe the panel right or down (from the top of its list) to close it.
   var apSw = null;
@@ -316,7 +331,7 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   new MutationObserver(() => { if (!apOn()) { apClose(); apGridClose(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-shell'] });
   apReady = true;
   // Read-only view for tests and QA.
-  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep, stepping: apStepping });
+  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, moveFav: (id, before) => { apMoveFav(id, before); apPaint(); }, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep, stepping: apStepping });
   // appsPanelOpen: the Apps tile's selector; false only before this part is ready (the Apps sheet opens then).
   const appsPanelOpen = () => apOpen();
   // The Apps tile tapped while the panel is up (or closed by this same finger): it goes away, nothing else happens.
