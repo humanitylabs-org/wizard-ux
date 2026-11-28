@@ -65,8 +65,8 @@ hidden from the text. Look: `web/core/action-cards.css`.
 
 ## WIZARD_BUTTONS_V1: tap-to-answer buttons in a reply
 
-wizard-ux issue 1889, behind the off-by-default switch `wizard/reply-buttons` (the Agent Service reads the same switch
-from the Look file and only then tells the agent about the marker, `server/reply-buttons.mjs`). An agent asks in its
+wizard-ux issue 1889, on for everyone (switch `wizard/reply-buttons` removed; the Agent Service tells every agent about
+the marker, `server/reply-buttons.mjs`). An agent asks in its
 normal text and puts one line per ask where the buttons belong:
 
 ```
@@ -82,6 +82,6 @@ normal text and puts one line per ask where the buttons belong:
   agents, steering a running reply): `Tapped <label> · <group>` lines plus a `[WIZARD_TAPS_V1]` line naming each tap.
   The thread draws it as a quiet machine line. The picked state is read back from the thread's history, so a reload and
   every other device show it; a group can be changed until the agent has replied after its tap.
-- Switch off, Copy, the Chats list preview and any client that can't draw them: the labels as text (`[Go for it]
+- Copy, the Chats list preview and any client that can't draw them: the labels as text (`[Go for it]
   [Drop this]`), so the owner can type one.
-- Tests: `tests/reply-buttons.test.mjs`; browser: `tests/qa-chat-reply-buttons.cjs` (`QA_SWITCH=off` for the off case).
+- Tests: `tests/reply-buttons.test.mjs`; browser: `tests/qa-chat-reply-buttons.cjs`.

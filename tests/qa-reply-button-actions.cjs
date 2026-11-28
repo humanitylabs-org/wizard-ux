@@ -1,6 +1,6 @@
 'use strict';
 // Reply buttons that act on an app directly, with no agent turn (wizard-ux issue 1973, part 2; switch
-// wizard/reply-actions on top of wizard/reply-buttons) in a real browser. A disposable synthetic box (nothing real is
+// wizard/reply-actions on top of the reply buttons) in a real browser. A disposable synthetic box (nothing real is
 // read or written) keeps one Morning thread whose agent post has an action button (Workout: Done -> app "checklist"),
 // a plain button (Read: Done) and answers POST/GET /wizard/v1/reply-actions like the Agent Service: it reads the
 // action from the thread's own message, runs it against an in-memory checklist app and saves the outcome per thread.
@@ -58,7 +58,7 @@ async function boot(browser, box, shell, entry) {
   await context.addInitScript(({ shell, on, skin }) => {
     if (window !== top) return;
     for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/reply-buttons': true, 'wizard/reply-actions': true } : { 'wizard/reply-buttons': true } }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/reply-actions': true } : {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
   }, { shell, on: SWITCH === 'on', skin: SKIN });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;

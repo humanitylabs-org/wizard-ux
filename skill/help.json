@@ -389,10 +389,6 @@
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
     },
-    "wizard/reply-buttons": {
-      "help": "Tap-to-answer buttons in agent replies.",
-      "where": "Settings › Appearance › Try new features › Tap to answer in replies"
-    },
     "wizard/reply-actions": {
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
       "where": "Settings › Appearance › Try new features › Buttons that tick things off in apps"
@@ -629,6 +625,7 @@
   },
   "retired": {
     "Pin to top": "on for everyone: pins stay first in Inbox.",
+    "Reply buttons": "on for everyone: a tap answers.",
     "Five-choice first chat": "on for everyone: a first chat opens with five choices to tap.",
     "Backup health in Resources": "on for everyone: Home › Resources › Health.",
     "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",
