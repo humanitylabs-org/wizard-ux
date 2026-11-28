@@ -163,13 +163,11 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
-- **Backup health in Resources**: Resources shows your backup's health.
 - **Bottom app bar on desktop**: Apps bar at the bottom on any width.
 - **Buttons that tick things off in apps**: Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Catch me up clears Sent**: Catch me up clears finished Sent chats, any age.
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
-- **Five-choice first chat**: Five picks, then a first win.
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
@@ -197,7 +195,9 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
-- **Get set up list in Setup**: on for everyone: Setup lists optional accounts to connect; the Welcome asks only for AI sign-in.
+- **Get set up list in Setup**: on for everyone: Setup lists optional accounts to connect.
+- **Five-choice first chat**: on for everyone: a first chat opens with five choices to tap.
+- **Backup health in Resources**: on for everyone: Home › Resources › Health.
 - **Ask before sharing feature counts**: on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.
 - **Add an app: search the App Store too**: on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.
 - **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
