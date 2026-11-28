@@ -421,10 +421,6 @@
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
     },
-    "wizard/inbox-pin-top": {
-      "help": "Pin threads on top.",
-      "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
-    },
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
@@ -636,6 +632,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Pin to top": "on for everyone: a pinned thread stays first in Inbox.",
     "Backup health in Resources": "on for everyone: Home › Resources › Health.",
     "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",
     "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",

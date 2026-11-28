@@ -425,7 +425,7 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', inbox
   // Inbox rows (issue 1779): inbox = { quiet(s), pin(s) → 0 or its pin rank }. Ready is the Inbox: what inboxWants keeps
   // and placeOf puts in Inbox, pinned rows first. No Recent.
   if (inbox) {
-    // Pin to top (issue 1887, switch wizard/inbox-pin-top): inbox.top(s) is true for a thread in the owner's pin list.
+    // Pin to top (issue 1887, on for everyone): inbox.top(s) is true for a thread in the owner's pin list.
     // It is always in Inbox (never in Sent) and ranks above Daily; `counted` leaves out a read one that is only here
     // because of the pin, so pinning never adds to the count or the badge.
     const top = s => !!inbox.top?.(s), pin = s => Number(inbox.pin?.(s)) || 0;

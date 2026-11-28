@@ -1,3 +1,0 @@
-/* Pin to top (wizard-ux issue 1887): pinned rows are Inbox's own rows (core/chats-inboxrows.js, look in core/chats.css)
- * with the pin mark, so nothing of their own is drawn here. Markup: core/chats-inboxrows.js. */
-html[data-tweaks~="wizard/inbox-pin-top"] .ch-ib-wrap.pinned .ch-ib-pin { flex: none; }

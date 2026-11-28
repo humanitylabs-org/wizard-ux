@@ -1,6 +1,6 @@
 'use strict';
 // Inbox row preview is plain text (wizard-os issue 974), in a real browser on a disposable synthetic box. Phone
-// 412x915 with wizard/inbox-pin-top on (Inbox rows are on for everyone), the Morning thread pinned on top: its row reads
+// 412x915 (Inbox rows and Pin to top are on for everyone), the Morning thread pinned on top: its row reads
 // "Morning · Fri 27 Nov. Workout · Meditate · MindFeed", never the agent's raw Markdown ("**", "[Workout](/morning/)")
 // nor the reply-button marker or its labels. A second thread's Markdown reply reads as words too.
 //   QA_AGENT_SERVICE=<wizard-agent-service checkout>: the list rows come from that Service's real list builder
@@ -35,7 +35,7 @@ const report = { origin, web, service: process.env.QA_AGENT_SERVICE || '', cases
       const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, 'wizard/inbox-pin-top': true };
+        const mix = { 'wizard/desktop-chats': true };
         await context.addInitScript(({ skin, mix }) => {
           if (window !== top || sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
           for (const [k, v] of Object.entries({ 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
@@ -69,7 +69,6 @@ const report = { origin, web, service: process.env.QA_AGENT_SERVICE || '', cases
         await page.goto(origin + prefix + 'index.html?phone');
         await page.waitForFunction(() => window.__wos && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/inbox-pin-top'), null, { timeout: 15000 });
         await page.evaluate(() => __wos.openSheet('inbox'));
         await page.waitForFunction(() => !!document.querySelector('.ch-list .ch-ib-wrap.pinned [data-chopen="qa-morning"]') && !!document.querySelector('.ch-list [data-chopen="qa-links"]'), null, { timeout: 15000 });
         await nap(700);

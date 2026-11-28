@@ -1,7 +1,7 @@
-// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default; Inbox rows are on for everyone): threads
+// Pin to top (wizard-ux issue 1887, on for everyone since the switch wizard/inbox-pin-top was removed): threads
 // in the owner's pin list (the box's ui-preferences pinnedChats, also what an agent adds to) rank above today's Daily,
 // in pin order, always in Inbox, drawn as the normal row with the pin mark; a read one that is only there because of
-// the pin is not counted. Runs the real list model and the real chats-inboxrows.js part. Switch off: nothing changes.
+// the pin is not counted. Runs the real list model and the real chats-inboxrows.js part. Pins hidden: nothing is lifted.
 // Browser proof: tests/qa-inbox-pin-top.cjs (phone + Classic, owner pin from the row menu, agent pin through the box).
 // Run: node --test tests/inbox-pin-top.test.mjs
 import test from 'node:test';
@@ -12,7 +12,7 @@ import { modelContext } from './fixtures/chats-list-model.mjs';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const J = v => JSON.parse(JSON.stringify(v));
-const H = 3600e3, NOW = Date.now(), SW = 'wizard/inbox-pin-top';
+const H = 3600e3, NOW = Date.now();
 const M = modelContext({}).WizChatsListModel;
 const iso = t => new Date(t).toISOString();
 const row = (id, h, extra = {}) => ({ id, title: 'T ' + id, status: 'completed', at: NOW - h * H, updatedAt: iso(NOW - h * H), lastAssistantAt: iso(NOW - h * H), messageCount: 2, ...extra });
@@ -58,14 +58,14 @@ test('list model: a read pinned thread does not change the count; an unread one 
   assert.ok(ids(unreadQuiet.counted).includes('m1'), 'unread: counted');
 });
 
-test('list model: without top facts (switch off) the groups are exactly today\'s', () => {
+test('list model: without top facts (Pins hidden) the groups are exactly today\'s', () => {
   const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin: base } });
   assert.equal('counted' in g, false);
   assert.deepEqual(ids(g.ready), ['d1', 'new1', 'read1'], 'Daily first, quiet threads in Sent');
 });
 
-/* The real part: reads the switch and the owner's pin list (window.WosChatPins). */
-function part({ tweaks, pins = [], pinsShown = true }) {
+/* The real part: reads the owner's pin list (window.WosChatPins); no switch, whatever data-tweaks says. */
+function part({ tweaks = '', pins = [], pinsShown = true }) {
   const ctx = vm.createContext({ console, Date, Promise, String, Number, Set, Map, Array, Object, JSON, setTimeout });
   ctx.window = ctx; ctx.globalThis = ctx;
   ctx.document = { documentElement: { dataset: { tweaks } } };
@@ -88,8 +88,8 @@ function part({ tweaks, pins = [], pinsShown = true }) {
 }
 const order = html => [...html.matchAll(/<div class="ch-row-wrap ch-ib-wrap([^"]*)"[^>]*>[\s\S]*?data-chopen="([^"]+)"/g)].map(m => ({ id: m[2], pinned: / pinned/.test(m[1]) }));
 
-test('part: switch on, Pin to top rows first with the pin mark, the same row; the count leaves out a read one; menu word', () => {
-  const { api, rows } = part({ tweaks: SW, pins: ['m1'] });
+test('part: no switch, Pin to top rows first with the pin mark, the same row; the count leaves out a read one; menu word', () => {
+  const { api, rows } = part({ pins: ['m1'] });
   const html = api.inboxRowsBody({ id: 'w' }, rows, null);
   const r = order(html);
   assert.deepEqual(J(r.slice(0, 2)), [{ id: 'm1', pinned: true }, { id: 'd1', pinned: true }]);
@@ -103,13 +103,15 @@ test('part: switch on, Pin to top rows first with the pin mark, the same row; th
   assert.equal(fx.top({ id: 'm1' }), true); assert.ok(fx.pin({ id: 'm1' }) < fx.pin({ id: 'd1' }));
 });
 
-test('part: switch off (or Pins hidden), a pinned thread is not lifted and the menu says Pin', () => {
-  for (const o of [{ tweaks: '' }, { tweaks: SW, pinsShown: false }]) {
-    const { api, rows } = part({ ...o, pins: ['m1', 'read1'] });
-    const html = api.inboxRowsBody({ id: 'w' }, rows, null), ref = part({ tweaks: '', pins: [] });
-    assert.equal(html, ref.api.inboxRowsBody({ id: 'w' }, ref.rows, null), 'byte-identical to no pins: ' + JSON.stringify(o));
-    assert.equal(order(html)[0].id, 'd1');
-    if (!o.pinsShown && o.pinsShown !== undefined) continue;
-    assert.equal(api.ibPinWord(false), 'Pin');
-  }
+test('part: the removed switch changes nothing; a stale data-tweaks with the old id draws the same', () => {
+  const a = part({ pins: ['m1'] }), b = part({ tweaks: 'wizard/inbox-pin-top', pins: ['m1'] });
+  assert.equal(a.api.inboxRowsBody({ id: 'w' }, a.rows, null), b.api.inboxRowsBody({ id: 'w' }, b.rows, null));
+  assert.equal(order(a.api.inboxRowsBody({ id: 'w' }, a.rows, null))[0].id, 'm1');
+});
+
+test('part: Pins hidden in the Filter sheet, a pinned thread is not lifted', () => {
+  const { api, rows } = part({ pinsShown: false, pins: ['m1', 'read1'] });
+  const html = api.inboxRowsBody({ id: 'w' }, rows, null), ref = part({ pins: [] });
+  assert.equal(html, ref.api.inboxRowsBody({ id: 'w' }, ref.rows, null), 'byte-identical to no pins');
+  assert.equal(order(html)[0].id, 'd1');
 });

@@ -1213,6 +1213,8 @@ html:root .ch-list .ch-ib-bd { flex: 1; min-width: 0; display: flex; flex-direct
 html:root .ch-list .ch-ib-l1, html:root .ch-list .ch-ib-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
 html:root .ch-list .ch-ib-from { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.8125rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-accent); }
 html:root .ch-list .ch-ib-pin { margin-right: 4px; font-size: 0.75rem; }
+/* Pin to top (wizard-ux issue 1887): a pinned row's 📌 never shrinks. */
+html:root .ch-ib-wrap.pinned .ch-ib-pin { flex: none; }
 html:root .ch-list .ch-ib-l1 time { flex: none; font: 400 0.75rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text-muted); }
 html:root .ch-list .ch-ib-row.unread .ch-ib-l1 time { color: var(--wz-accent); }
 html:root .ch-list .ch-ib-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 500 1rem / 1.3 var(--wz-font-ui, inherit); color: var(--wz-text); }
