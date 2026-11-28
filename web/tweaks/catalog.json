@@ -27,7 +27,6 @@
     "wizard/lock-screen-player",
     "wizard/desktop-bottom-bar",
     "wizard/try-feature-counts",
-    "wizard/apps-panel",
     "wizard/phone-push",
     "wizard/install-agent-builds",
     "wizard/inbox-pin-top",

@@ -110,7 +110,10 @@ const measure = page => page.evaluate(() => {
       };
       const tap = async sec => { const p = await center(`.sec-tile[data-sec="${sec}"]`); await page.touchscreen.tap(p.x, p.y); await nap(800); };
       const sideways = async (sel, dx, stepMs = 16) => { const p = await center(sel); await touch([p, ...[1, 2, 3, 4, 5].map(k => ({ x: p.x + dx * k / 5, y: p.y }))], 10, stepMs); await nap(900); };
-      const pick = async id => { await page.click(`#launcherBody [data-app="${id}"]`); await page.waitForFunction(id => { const d = __wos.desks[__wos.idx], w = d && __wos.wins[d.focus]; return w?.appId === id && !__wos.sheet; }, id, { timeout: 8000 }).catch(() => {}); await nap(700); };
+      // The Apps tile's selector is the Favorites panel (wizard-ux#1955, on for everyone): All apps, then the app.
+      const panelOpen = () => page.evaluate(() => !!WizCore.appsPanel?.isOpen());
+      const openPanel = async () => { await tap('apps'); if (!(await panelOpen())) await tap('apps'); };
+      const pick = async id => { await page.click('#appsPanel [data-apall]'); await page.click(`#appsPanel [data-apopen="${id}"]`); await page.waitForFunction(id => { const d = __wos.desks[__wos.idx], w = d && __wos.wins[d.focus]; return w?.appId === id && !__wos.sheet; }, id, { timeout: 8000 }).catch(() => {}); await nap(700); };
       const mark = () => page.evaluate(() => { for (const f of document.querySelectorAll('iframe.appframe')) try { f.contentWindow.__qaMark ||= f.closest('[data-win]').dataset.win + ':' + Math.random(); } catch (_) {} });
       const marks = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll('iframe.appframe')].map(f => { try { return [f.contentWindow.location.pathname, f.contentWindow.__qaMark || '']; } catch (_) { return ['?', '']; } })));
       try {
@@ -134,11 +137,11 @@ const measure = page => page.evaluate(() => {
           assert.deepEqual(steps.home.tiles.map(t => t.badge), ['', '12', '3', ''], 'badges');
           // wizard-ux#1950 (James: "there should be no number above the orb"): the counts live only on the tiles.
           assert.equal(steps.home.orbNum, '', `no number on the orb at Home (${steps.home.orbNum})`);
-          // 5) Apps, first tap: the App selector (Recent, the grid, search).
-          await tap('apps'); steps.selector = await state(page); await shot('selector');
-          assert.equal(steps.selector.sheet, 'launcher', 'first Apps tap opens the App selector');
-          steps.selectorParts = await page.evaluate(() => ({ groups: [...document.querySelectorAll('#launcherBody .lgroup h4')].map(h => h.textContent.trim().split(/\s/)[0]), search: !!document.querySelector('#search')?.getClientRects().length }));
-          assert.deepEqual(steps.selectorParts.groups.slice(0, 2), ['Recent', 'Apps'], 'Recent row then the grid'); assert.ok(steps.selectorParts.search, 'the search field');
+          // 5) Apps, first tap: the App selector, the Favorites panel (search, Favorites, Recent; wizard-ux#1955).
+          await tap('apps'); steps.selector = await state(page); steps.selector.panel = await panelOpen(); await shot('selector');
+          assert.ok(steps.selector.panel, 'first Apps tap opens the Favorites panel'); assert.equal(steps.selector.sheet, null, 'not the old Apps sheet');
+          steps.selectorParts = await page.evaluate(() => ({ groups: [...document.querySelectorAll('#appsPanel .ap-ht')].map(h => h.textContent.trim()), search: !!document.querySelector('#appsPanel [data-apq]')?.getClientRects().length }));
+          assert.deepEqual(steps.selectorParts.groups, ['Favorites', 'Recent'], 'Favorites then Recent'); assert.ok(steps.selectorParts.search, 'the search field');
           // 6) Picking an app: it fills Apps and the tile wears its name.
           await pick('notes'); await mark(); steps.notes = await state(page); await shot('notes');
           assert.equal(steps.notes.cur, 'apps'); assert.equal(steps.notes.front, 'notes'); assert.equal(steps.notes.sheet, null);
@@ -150,28 +153,28 @@ const measure = page => page.evaluate(() => {
           await shot('chats'); assert.equal(steps.chats.orbNum, '', `no number on the orb in Chats (${steps.chats.orbNum})`);
           await tap('apps'); steps.back = await state(page); assert.equal(steps.back.cur, 'apps'); assert.equal(steps.back.front, 'notes');
           assert.deepEqual(await marks(), m1, 'Notes was not reloaded');
-          // 8) The tile again on the app: the selector over it, dimmed; a tap outside closes it, so does Back.
-          await tap('apps'); steps.over = await state(page); await shot('selector-over-app');
-          assert.equal(steps.over.sheet, 'launcher'); assert.equal(steps.over.cur, 'apps');
-          steps.dim = await page.evaluate(() => +getComputedStyle(document.querySelector('#scrim')).opacity); assert.ok(steps.dim > .5, 'the app is dimmed behind it');
-          await page.mouse.click(c.width / 2, 20); await nap(600); assert.equal((await state(page)).sheet, null, 'a tap outside closes it');
+          // 8) The tile again on the app: the panel over it, dimmed; a tap outside closes it, so does Back.
+          await tap('apps'); steps.over = await state(page); steps.over.panel = await panelOpen(); await shot('selector-over-app');
+          assert.ok(steps.over.panel); assert.equal(steps.over.cur, 'apps');
+          steps.dim = await page.evaluate(() => { const s = document.querySelector('.ap-scrim'); return !!s && !s.hidden && +getComputedStyle(s).opacity; }); assert.ok(steps.dim > .5, 'the app is dimmed behind it');
+          await page.mouse.click(16, 20); await nap(600); assert.equal(await panelOpen(), false, 'a tap outside closes it');
           await tap('apps'); await page.evaluate(() => __wos.onBack()); await nap(600);
-          steps.afterBack = await state(page); assert.equal(steps.afterBack.sheet, null, 'Back closes it'); assert.equal(steps.afterBack.front, 'notes', 'the app is untouched');
+          steps.afterBack = await state(page); assert.equal(await panelOpen(), false, 'Back closes it'); assert.equal(steps.afterBack.front, 'notes', 'the app is untouched');
           assert.deepEqual(await marks(), m1, 'still not reloaded');
-          // 9) The flip with one app.
-          await sideways('.sec-tile[data-sec="apps"]', -60); steps.flipOne = await state(page);
-          assert.match(steps.flipOne.toast, /Open a second app to flip between them/); assert.equal(steps.flipOne.front, 'notes');
-          // A second app replaces Notes in Apps; the flip goes back and forth with a toast, nothing reloads.
-          await page.evaluate(() => __wos.closeSheets()); await tap('apps'); await pick('wizard-music'); await mark();
+          // 9) The flip with one app, from Home (with Apps in front a swipe steps through Recent: qa-apps-panel.cjs).
+          await tap('home'); await sideways('.sec-tile[data-sec="apps"]', -60); steps.flipOne = await state(page);
+          assert.match(steps.flipOne.toast, /Open a second app to flip between them/); assert.equal(steps.flipOne.front, 'home');
+          // A second app replaces Notes in Apps; the flip from Home goes back and forth with a toast, nothing reloads.
+          await page.evaluate(() => __wos.closeSheets()); await openPanel(); await pick('wizard-music'); await mark();
           steps.music = await state(page); assert.equal(steps.music.front, 'wizard-music'); assert.equal(steps.music.tiles[3].label, 'Music');
           const m2 = await marks();
-          await sideways('.sec-tile[data-sec="apps"]', -60); steps.flip = await state(page); await shot('flip');
+          await tap('home'); await sideways('.sec-tile[data-sec="apps"]', -60); steps.flip = await state(page); await shot('flip');
           assert.equal(steps.flip.front, 'notes'); assert.match(steps.flip.toast, /Notes ⇄ Music/); assert.equal(steps.flip.tiles[3].label, 'Notes');
-          await sideways('.sec-tile[data-sec="apps"]', 60); steps.flipBack = await state(page);
+          await tap('home'); await sideways('.sec-tile[data-sec="apps"]', 60); steps.flipBack = await state(page);
           assert.equal(steps.flipBack.front, 'wizard-music'); assert.match(steps.flipBack.toast, /Music ⇄ Notes/);
           assert.deepEqual(await marks(), m2, 'flipping reloads neither app');
           // A third app: only the last two stay open.
-          await tap('apps'); await pick('wizard-calendar'); steps.third = await state(page);
+          await openPanel(); await pick('wizard-calendar'); steps.third = await state(page);
           steps.thirdFrames = Object.keys(await marks()).sort();
           assert.equal(steps.third.front, 'wizard-calendar'); assert.ok(!steps.thirdFrames.includes('/notes/'), `the oldest app closed (${steps.thirdFrames})`);
           // 10) Messenger: tap opens it; a long-press pins another app; Reset brings Messenger back.

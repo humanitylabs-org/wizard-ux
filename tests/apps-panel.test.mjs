@@ -1,6 +1,6 @@
 // wizard-ux issue 1955: the phone Apps tile's Favorites panel, the nine bubbles and the Recent step-through
-// (web/app-appspanel.js, switch wizard/apps-panel) run in node:vm against a fake page. With the switch off nothing opens,
-// nothing steps and nothing is saved; with it on the panel lists Favorites then Recent (four, not Favorites, × each),
+// (web/app-appspanel.js, on for everyone) run in node:vm against a fake page. Without the four-section bar (the desktop)
+// nothing opens, nothing steps and nothing is saved; on the phone the panel lists Favorites then Recent (four, not Favorites, × each),
 // search puts the best match first, the × and Favorites are saved to ui-preferences, opening an app puts it back on
 // Recent, the nine fill from recent then favorites (newest first), and a bar swipe steps one app and stops at the ends.
 import test from 'node:test';
@@ -20,7 +20,7 @@ function el() {
   return e;
 }
 
-function harness({ on = true, sections = true, current = 'apps', front = 'notes', recent = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger'], favs = null, hidden = null, extra = [] } = {}) {
+function harness({ sections = true, current = 'apps', front = 'notes', recent = ['notes', 'music', 'calendar', 'podcasts', 'maps', 'messenger'], favs = null, hidden = null, extra = [] } = {}) {
   const local = new Map(), store = new Map([['recent', recent]]), puts = [], opened = [], toasts = [];
   if (favs) local.set('wos.apps.favorites.v1', JSON.stringify(favs));
   if (hidden) local.set('wos.apps.recentHidden.v1', JSON.stringify(hidden));
@@ -29,7 +29,7 @@ function harness({ on = true, sections = true, current = 'apps', front = 'notes'
   APP.wizard = { id: 'wizard', name: 'Chats', kind: 'chats' }; APP['app-store'] = { id: 'app-store', name: 'App Store', url: '/s/', kind: 'wizard' }; APP.agents = { id: 'agents', name: 'Agents', kind: 'wizard' };
   APP.android = { id: 'android', name: 'Android thing', kind: 'native' };
   for (const a of extra) APP[a.id] = a;
-  const root = { getAttribute: k => k === 'data-tweaks' ? (on ? 'wizard/apps-panel other/x' : 'other/x') : null };
+  const root = { getAttribute: () => null }; // no tweak attribute: the panel needs no switch (wizard/apps-panel went)
   const desks = [{ id: 'home', home: true, wins: [] }, { id: 'da', wins: ['w1'], focus: 'w1' }];
   const appVars = { desks, W: { w1: { id: 'w1', app: 'frame', appId: front } }, idx: 1, sheet: null };
   const device = el(), dock = el(), made = [];
@@ -61,8 +61,9 @@ function harness({ on = true, sections = true, current = 'apps', front = 'notes'
     click, rows, q, puts, opened, toasts, local, store, appVars, ctx, panel };
 }
 
-test('switch off: the tile keeps the Apps sheet, nothing steps, nothing is saved', () => {
-  for (const h of [harness({ on: false }), harness({ sections: false })]) {
+test('no switch: up on the phone bar for everyone; without the four-section bar nothing opens, steps or is saved', () => {
+  assert.equal(harness().api.appsPanelOn(), true, 'no tweak attribute is needed');
+  for (const h of [harness({ sections: false })]) {
     assert.equal(h.api.appsPanelOn(), false);
     assert.equal(h.api.appsPanelOpen(), false, 'no panel: app-sections.js opens the Apps sheet');
     assert.equal(h.api.appsStepping(), false, 'the bar swipe stays the section swipe');

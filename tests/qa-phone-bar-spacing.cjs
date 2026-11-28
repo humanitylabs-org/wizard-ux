@@ -125,7 +125,8 @@ const r1 = n => Math.round(n * 10) / 10;
         await page.evaluate(() => { __wos.closeSheets?.(); }); 
         const ap = await page.evaluate(() => { const r = document.querySelector('.sec-tile[data-sec="apps"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
         await page.touchscreen.tap(ap.x, ap.y); await nap(800);
-        await page.click('#launcherBody [data-app="wizardos-tracker"]');
+        // The Apps tile opens the Favorites panel (wizard-ux#1955): All apps, then the app.
+        await page.click('#appsPanel [data-apall]'); await page.click('#appsPanel [data-apopen="wizardos-tracker"]');
         await page.waitForFunction(() => { const d = __wos.desks[__wos.idx], w = d && __wos.wins[d.focus]; return w?.appId === 'wizardos-tracker' && !__wos.sheet; }, null, { timeout: 8000 }).catch(() => {});
         await nap(800);
         steps.bar = await bar(page);
