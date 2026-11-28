@@ -186,7 +186,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Phone recovery mode**: Android: a frozen start reopens in recovery mode.
 - **Private first setup**: New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.
 - **Repair the agent's Wizard connection**: If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.
-- **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
 - **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
@@ -202,6 +201,7 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
+- **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
 - **Install sheet recommends private AI**: on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.
 - **Agent access under the browser boundary**: on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
