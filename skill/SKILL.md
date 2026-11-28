@@ -198,7 +198,7 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
-- **Backup health in Resources**: on for everyone: Home › Resources › Health shows your backup; Include it adds a left-out main agent.
+- **Backup health in Resources**: on for everyone: Home › Resources › Health shows your backup, with Include it for a left-out main agent.
 - **Ask before sharing feature counts**: on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.
 - **Add an app: search the App Store too**: on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.
 - **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
@@ -227,7 +227,6 @@ No longer switches (owners and old chats may still name them):
 - **Get alerts in Chats or as badges?** Settings › Notifications, per app; Notifications in Chats (Settings › Chats & app screens) must be on for Chats.
 - **Find a message that didn't send?** Settings › Unsent & recovered.
 - **See AI usage or server load?** Home's resource bars, or Settings › Resources.
-- **See whether my backup is working?** Home › Resources › Health › Backup: last run, checked, kept; amber or red says why. Main agent left out: tap Include it.
 - **Add another Wizard?** Settings › Connections › Wizards › Add a Wizard.
 - **Install an app?** Open the App Store (desktop: Apps column › + Add an app › Get more; phone: swipe the orb up › Get more), open the app, Get.
 - **See keyboard shortcuts?** Desktop: ⌥/ or hold ⌥.
