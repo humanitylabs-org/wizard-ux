@@ -1,6 +1,6 @@
-// wizard-agent-service issue 650 (switch wizard/first-chat-goals): a reply can carry tap-to-pick answers,
+// wizard-agent-service issue 650 (on for everyone; switch wizard/first-chat-goals removed): a reply can carry tap-to-pick answers,
 // [WIZARD_CHOICES_V1]{"choices":[…]}[/WIZARD_CHOICES_V1] on its own line. The marker never shows as text (thread, copy,
-// stream, Chats preview); while the switch is on Chats draws one button per choice under the newest finished answer.
+// stream, Chats preview); Chats draws one button per choice under the newest finished answer.
 import { modelContext } from './fixtures/chats-list-model.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,17 +55,17 @@ test('marker: stripped from the Chats preview and from a streaming answer, also 
 
 // turnHtml exactly as Chats runs it (sliced the way tests/chat-answer-postscript.test.mjs does).
 const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
-function turnHtml(tn, { tweaks = 'wizard/first-chat-goals', last = true, working = false } = {}) {
+function turnHtml(tn, { tweaks = '', last = true, working = false } = {}) {
   const c = { getComputedStyle: () => ({ getPropertyValue: () => '' }), document: { documentElement: { dataset: { tweaks } } }, window: { WizConfig: { agent: () => 'Fixture' } },
     KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null, replyCard: () => '', msgIds: () => '', quoteBtn: () => '',
     userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
   modelContext(c);
-  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = ', '  const replyChoicesOn = '].map(line).join('')}${between(chats, '  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, c);
+  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${between(chats, '  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, c);
   return c.turnHtml({ texts: [] }, tn, last, working, null, null);
 }
 const buttons = html => [...html.matchAll(/<button type="button" data-chchoice="([^"]*)">([^<]*)<\/button>/g)].map(m => [m[1], m[2]]);
 
-test('switch on: one button per choice under the newest finished answer, carrying its own words', () => {
+test('one button per choice under the newest finished answer, carrying its own words', () => {
   const [tn] = KIT.parseRows(rows(hello));
   const html = turnHtml(tn);
   assert.match(html, /<div class="ch-choices" role="group" aria-label="Pick a reply">/);
@@ -75,15 +75,21 @@ test('switch on: one button per choice under the newest finished answer, carryin
   assert.deepEqual(buttons(turnHtml(odd)), [['Tom &amp; Jerry &quot;quoted&quot;', 'Tom &amp; Jerry &quot;quoted&quot;']], 'escaped');
 });
 
-test('no buttons with the switch off, on an older turn, or while the agent is still working', () => {
+test('no switch: buttons with no tweaks and with an old saved off value; none on an older turn or while working', () => {
   const [tn] = KIT.parseRows(rows(hello));
-  for (const html of [turnHtml(tn, { tweaks: '' }), turnHtml(tn, { tweaks: 'wizard/first-chat-goals-x wizard/result-reader' }), turnHtml(tn, { last: false }), turnHtml(tn, { working: true })]) {
+  for (const tweaks of ['', 'wizard/result-reader']) assert.deepEqual(buttons(turnHtml(tn, { tweaks })), FIVE.map(t => [t, t]), tweaks || 'no tweaks');
+  for (const html of [turnHtml(tn, { last: false }), turnHtml(tn, { working: true })]) {
     assert.ok(!html.includes('ch-choices') && !html.includes('data-chchoice'), html.slice(0, 200));
     assert.ok(!html.includes('WIZARD_CHOICES'), 'the marker never shows');
   }
-  // Off, the reply reads exactly as a reply without the marker.
+  // An older turn reads exactly as a reply without the marker.
   const [bare] = KIT.parseRows(rows("Hi, I'm your Wizard. What would you like help with first?"));
-  assert.equal(turnHtml(tn, { tweaks: '' }), turnHtml(bare, { tweaks: '' }));
+  assert.equal(turnHtml(tn, { last: false }), turnHtml(bare, { last: false }));
+});
+
+test('the switch is gone: not in the catalog, and a saved choice for it is cleared', () => {
+  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(!JSON.stringify(catalog).includes('wizard/first-chat-goals'));
 });
 
 // Agent chat parity: the same reply in a main thread and in host-profile, container and restricted routed threads.

@@ -385,10 +385,6 @@
       "help": "Chats are tagged from what they are about; a channel's What goes here… edits its list.",
       "where": "Settings › Appearance › Try new features › Automatic chat tags"
     },
-    "wizard/first-chat-goals": {
-      "help": "Five picks, then a first win.",
-      "where": "Settings › Appearance › Try new features › Five-choice first chat"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
@@ -648,6 +644,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Five-choice first chat": "on for everyone: a first chat opens with five things to tap; a tap sends that answer.",
     "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",
     "Result reader": "on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.",
     "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",

@@ -21,3 +21,9 @@ html:root .msg.a .ch-act .ch-act-btn.pri { background: var(--wz-accent); border-
 html:root .msg.a .ch-act .ch-act-btn.no { margin-left: auto; border-color: transparent; background: transparent; color: var(--wz-text-muted); }
 html:root .msg.a .ch-act .ch-act-btn:disabled { opacity: .6; cursor: default; }
 html:root .msg.a .ch-act .ch-act-btn:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+/* Tap-to-pick replies (WIZARD_CHOICES_V1, wizard-agent-service issue 650; on for everyone, switch wizard/first-chat-goals
+ * removed): the reply buttons under the newest answer (core/chats-attach.js turnHtml). */
+html:root .msg.a .ch-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 2px; }
+html:root .msg.a .ch-choices button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--wz-accent); border-radius: 22px; background: var(--wz-surface-raised, var(--wz-surface)); color: var(--wz-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+html:root .msg.a .ch-choices button:disabled { opacity: .6; cursor: default; }
+html:root .msg.a .ch-choices button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }

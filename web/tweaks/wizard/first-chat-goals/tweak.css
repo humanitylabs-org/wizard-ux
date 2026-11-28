@@ -1,5 +1,0 @@
-/* First chat with five choices (wizard-agent-service issue 650): tap-to-pick replies under the newest answer. */
-html[data-tweaks~="wizard/first-chat-goals"] .msg.a .ch-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 2px; }
-html[data-tweaks~="wizard/first-chat-goals"] .msg.a .ch-choices button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--wz-accent); border-radius: 22px; background: var(--wz-surface-raised, var(--wz-surface)); color: var(--wz-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
-html[data-tweaks~="wizard/first-chat-goals"] .msg.a .ch-choices button:disabled { opacity: .6; cursor: default; }
-html[data-tweaks~="wizard/first-chat-goals"] .msg.a .ch-choices button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
