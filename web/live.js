@@ -1288,16 +1288,18 @@
     restore(id) {
       this._archivedNew?.(id, false);
       const s = this.session(id); if (!s) return Promise.resolve(false);
-      if (typeof HOLD !== 'undefined' && HOLD[titleScope(s)]) holdEnd(titleScope(s)); // issue 2063: his Restore ends the hold
+      // Issue 2063: his Restore ends the hold; it is set aside during the write and put back if the write fails.
+      const hk = titleScope(s), held = typeof HOLD !== 'undefined' ? HOLD[hk] : null; if (held) holdEnd(hk);
+      const unheld = ok => { if (!ok && held && !HOLD[hk]) { HOLD[hk] = held; holdWrite(HOLD_KEY, HOLD); } return ok; };
       const at = new Date().toISOString();
-      if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));
+      if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false)).then(unheld);
       return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
         await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
         writeRestored({ ...readRestored(), [id]: at });
       }).then(ok => {
         // Undo / Restore brings back the waiting record its archive took (wizard-ux issue 1928).
         if (ok) try { void this.agentInbox?.restoreThread?.(id); } catch (_) {}
-        return ok;
+        return unheld(ok);
       });
     },
     /* One thread's own state by id, stored nowhere (wizard-ux issue 1928): the Inbox reads a hidden worker thread's

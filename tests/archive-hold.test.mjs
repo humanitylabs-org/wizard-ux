@@ -156,3 +156,19 @@ test('browser regression on a lagging box (phone + desktop)', { skip: !process.e
   const r = spawnSync(process.execPath, [new URL('./qa-archive-hold.cjs', import.meta.url).pathname], { encoding: 'utf8', env: { ...process.env, QA_SWITCH: 'on' } });
   assert.equal(r.status, 0, r.stdout.slice(-3000));
 });
+
+test('Restore ends the hold only once its write worked; a failed Restore keeps it held', async () => {
+  for (const works of [true, false]) {
+    const t = harness();
+    const s = { id: 's1', archived: true, status: 'completed', runId: 'run-w1' };
+    t.H.holdStart({ ...s, status: 'running' });
+    Object.assign(t.ctx, { OVER: new Map(), hasNew: () => false, S: s, Promise, Error, readRestored: () => ({}), writeRestored() {}, encodeURIComponent,
+      req: async () => { if (!works) throw new Error('HTTP 500'); return { ok: true }; }, setTimeout: () => 1, clearTimeout() {} });
+    const L = vm.runInContext(`({ session: () => S, emit() {}, refresh() {}, seenOf() {}, agentOf: () => '', _archivedNew() {},\n${cut(live, '    busy(id) {', "    /* One thread's own state by id")} })`, t.ctx);
+    const p = L.restore('s1');
+    assert.equal(s.archived, false, 'back in the list on the tap');
+    assert.equal(await p, works);
+    if (works) assert.deepEqual(Object.keys(t.H.HOLD), [], 'Restore ended the hold');
+    else { assert.equal(t.H.HOLD['hermes:s1']?.run, 'run-w1', 'a failed Restore keeps the hold'); assert.equal(s.archived, true, 'and the chat where it was'); }
+  }
+});
