@@ -1,4 +1,4 @@
-/* Get set up (wizard-ux issue 1837, switch wizard/get-set-up, off by default). James, 25 Nov 2026: onboarding must not
+/* Get set up (wizard-ux issue 1837; on for everyone, switch wizard/get-set-up removed). James, 25 Nov 2026: onboarding must not
  * overwhelm, so the accounts a Wizard can help with become an ongoing, optional list in Setup instead of first-run
  * steps. Right after the phone row: Email, Messages, Money, Calendar and Bring what your old AI knows (the Importer).
  * Each row says what it unlocks and whether it is done; nothing here is required to use Wizard.
@@ -8,11 +8,9 @@
  * own Accounts page counts them), Finances api/overview (bank accounts), Calendar api/live `connected` or a saved iCal
  * source, Importer api/imports (something came in). An app that can't answer shows the row as not started.
  * Tap: an installed app opens (the shell's open-app message, as Recommended next does), where its own connect screen
- * is; an app not installed yet opens the Store at that app with open=1, so it installs and then opens.
- * The switch is read from the shell around this frame (data-tweaks); off, html() is '' and nothing is read. */
+ * is; an app not installed yet opens the Store at that app with open=1, so it installs and then opens. */
 (() => {
   'use strict';
-  const SWITCH = 'wizard/get-set-up';
   const ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
   const imported = i => !!i && typeof i === 'object' && ['imported', 'partly'].includes(i.state || ((i.imported_at || i.archived_at) ? 'imported' : 'scanned'));
   const ROWS = [
@@ -29,13 +27,6 @@
   ];
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const framed = () => { try { return parent !== window; } catch (_) { return false; } };
-  // The shell paints its switches on its own <html>; Setup standalone (or a test) may carry them on its own.
-  function on() {
-    let t = '';
-    try { if (framed()) t = parent.document.documentElement.getAttribute('data-tweaks') || ''; } catch (_) {}
-    if (!t) try { t = document.documentElement.getAttribute('data-tweaks') || ''; } catch (_) {}
-    return String(t).split(/\s+/).includes(SWITCH);
-  }
   // urls: app id -> its address on this box (installed), or null when the list said it isn't; done: id -> boolean.
   let urls = null, status = 'idle', changed = () => {}, seq = 0;
   const done = new Map();
@@ -79,7 +70,6 @@
     return false;
   }
   async function load() {
-    if (!on()) return;
     const mine = ++seq;
     if (!urls) { status = 'loading'; changed(); }
     const ok = await readApps();
@@ -94,7 +84,6 @@
   const CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const TICK = '<svg class="okmark" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
   function html() {
-    if (!on()) return '';
     let h = '<section class="get-set-up" aria-label="Get set up" data-get-set-up><h2>Get set up</h2><p class="intro">Optional. Connect what you want, whenever you want, or just ask me.</p><div class="rows">';
     for (const r of ROWS) {
       const isDone = done.get(r.id) === true, installed = !!urls?.[r.id];
@@ -120,7 +109,7 @@
     location.href = u.href;
   }
   function tap(id) {
-    if (!ID.test(id) || !ROWS.some(r => r.id === id) || !on()) return false;
+    if (!ID.test(id) || !ROWS.some(r => r.id === id)) return false;
     if (urls?.[id]) openApp(id); else openStore(id);
     return true;
   }
@@ -128,13 +117,7 @@
     const b = e.target?.closest?.('[data-gsu]');
     if (b) tap(b.dataset.gsu);
   });
-  // The switch can flip while Setup is open (Settings, another device): draw or drop the list at once.
-  try {
-    if (framed() && typeof MutationObserver === 'function') {
-      new MutationObserver(() => { changed(); if (on()) load(); }).observe(parent.document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-    }
-  } catch (_) {}
-  window.WosGetSetUp = { html, load, tap, on, ROWS,
+  window.WosGetSetUp = { html, load, tap, ROWS,
     init(render) { changed = render; },
     get state() { return { status, urls, done: Object.fromEntries(done) }; },
   };

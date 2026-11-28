@@ -369,10 +369,6 @@
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
     },
-    "wizard/get-set-up": {
-      "help": "Setup lists optional accounts to connect.",
-      "where": "Settings › Appearance › Try new features › Get set up list in Setup"
-    },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
@@ -388,10 +384,6 @@
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
-    },
-    "wizard/reply-buttons": {
-      "help": "Tap-to-answer buttons in agent replies.",
-      "where": "Settings › Appearance › Try new features › Tap to answer in replies"
     },
     "wizard/reply-actions": {
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
@@ -416,10 +408,6 @@
     "wizard/skins-look-only": {
       "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
       "where": "Settings › Appearance › Try new features › Skins are look only"
-    },
-    "wizard/inbox-pin-top": {
-      "help": "Pin threads on top.",
-      "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
     },
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",
@@ -628,6 +616,9 @@
   },
   "retired": {
     "Phone Apps panel": "on for everyone: tap Apps for Favorites and Recent, hold it for nine bubbles.",
+    "Pin to top": "on for everyone: pins stay first in Inbox.",
+    "Get set up list in Setup": "on for everyone: Setup lists optional accounts to connect.",
+    "Reply buttons": "on for everyone: a tap answers.",
     "Five-choice first chat": "on for everyone: a first chat opens with five choices to tap.",
     "Backup health in Resources": "on for everyone: Home › Resources › Health.",
     "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",

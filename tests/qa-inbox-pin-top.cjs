@@ -1,5 +1,5 @@
 'use strict';
-// Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top; Inbox rows are on for everyone), in a real browser on a
+// Pin to top (wizard-ux issue 1887, on for everyone: the switch wizard/inbox-pin-top was removed), in a real browser on a
 // disposable synthetic box. Phone 412x915 and Classic desktop 1440x960, Nebula and a light skin:
 //   - the owner opens a read row's menu (Shift+F10, as hold / right-click) and taps Pin to top: it shows first, above
 //     today's Daily, with the pin mark, the same row look; the pin is written to the box's pin list (ui-preferences);
@@ -7,15 +7,14 @@
 //     next preferences read it shows on top too, even a quiet thread that was in Sent; it does not add to the Inbox
 //     count or the badge while it is read;
 //   - newer activity on another thread never moves the pinned rows; Unpin (row menu) puts each back in normal order;
-//   QA_SWITCH=off: pins do not lift an Inbox row (today's order), and the menu says Pin (QA_WEB=<main>/web gives the
-//   same list-*.html byte for byte). QA_EXPECT=broken: the script reports what main does instead of failing.
+//   QA_EXPECT=broken: the script reports what main does instead of failing.
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://inbox-pin-top-1887.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'inbox-pin-top-evidence');
-const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), SW = process.env.QA_SWITCH !== 'off';
+const SHELLS = (process.env.QA_SHELLS || 'phone,classic').split(','), SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(','), SW = true;
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms)), M = 60e3, D = 864e5;
 const REC = 'inbox_' + 'b'.repeat(24), TODAY = new Date(now).toISOString().slice(0, 10);
@@ -56,7 +55,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
       const context = await browser.newContext({ viewport: phone ? { width: 412, height: 915 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
       try {
         await context.routeWebSocket('**/*', w => w.close());
-        const mix = { 'wizard/desktop-chats': true, ...(process.env.QA_SMART ? { 'wizard/smart-inbox': true } : {}), ...(SW ? { 'wizard/inbox-pin-top': true } : {}) };
+        const mix = { 'wizard/desktop-chats': true, ...(process.env.QA_SMART ? { 'wizard/smart-inbox': true } : {}) };
         await context.addInitScript(({ shell, skin, mix }) => {
           if (window !== top) return;
           if (sessionStorage.getItem('qaBoot')) return; sessionStorage.setItem('qaBoot', '1');
@@ -120,7 +119,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
         await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && window.WosExperience?.state.tweaks.length && !window.WosExperience.state.busy);
         await page.addStyleTag({ content: '#wosWelcome{display:none!important}' });
-        await page.waitForFunction(sw => { const t = (document.documentElement.dataset.tweaks || '').split(' '); return !sw || t.includes('wizard/inbox-pin-top'); }, SW && !BROKEN, { timeout: 15000 });
         if (phone) await page.evaluate(() => __wos.openSheet('inbox')); else await page.evaluate(() => __wux.openChatsList());
         const vis = sel => page.locator(sel).filter({ visible: true }).first();
         const shot = async name => { await page.evaluate(() => document.fonts.ready); await nap(300); await page.screenshot({ path: path.join(out, `${stem}-${name}.png`) }); };
@@ -177,7 +175,7 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await shot('2-agent-pinned');
         if (SW || BROKEN) {
           const L = entry.agentPinned;
-          check(JSON.stringify(L.ids) === JSON.stringify([T, 'qa-quiet', ...rest]), 'agent pin: on top in pin order, above Daily ' + JSON.stringify(L.ids));
+          check(JSON.stringify(L.ids) === JSON.stringify([T, 'qa-quiet', ...rest.filter(id => id !== 'qa-quiet')]), 'agent pin: on top in pin order, above Daily ' + JSON.stringify(L.ids));
           check(L.rows[1]?.pinned && L.rows[1]?.mark, 'agent-pinned row has the pin mark');
           check(L.badge === entry.first.badge && L.head === entry.first.head, `a read pinned thread does not add to the count: ${entry.first.head}/${entry.first.badge} -> ${L.head}/${L.badge}`);
           check(L.rows.every(r => r.h === L.rows[0].h || !r.av), 'same row height ' + JSON.stringify(L.rows.map(r => r.h)));
@@ -192,13 +190,6 @@ const report = { origin, web, switch: SW ? 'on' : 'off', cases: [] };
         await shot('3-unpinned');
         check(JSON.stringify(entry.unpinned.ids) === JSON.stringify(entry.first.ids), 'unpinned: normal order again ' + JSON.stringify(entry.unpinned.ids) + ' vs ' + JSON.stringify(entry.first.ids));
         if (SW) check(!BOX.pins.length, 'box pin list empty ' + JSON.stringify(BOX.pins));
-        if (!SW) {
-          // Off, the agent's pin never reached Inbox, so take it back on the box before saving the list.
-          BOX.pins = []; await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await nap(1200);
-          check(entry.ownerPinned.ids[0] === 'qa-daily' && entry.menuWord === 'Pin', 'switch off: a pin does not lift the row, menu says Pin');
-          fs.writeFileSync(path.join(out, `list-${stem}.html`), entry.listOff = await page.evaluate(() => [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length).innerHTML.replace(/\b\d+(m|h|d)\b/g, 'T')));
-          delete entry.listOff;
-        }
         if (!BROKEN) assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         if (!BROKEN) assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'unexpected writes: ' + JSON.stringify(entry.refused));
         entry.pass = !entry.broken;

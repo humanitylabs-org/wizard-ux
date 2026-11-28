@@ -175,7 +175,7 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') return; for (const n of document.querySelectorAll('[data-action-card]')) void read(n.dataset.actionCard, true);
       for (const sid of new Set([...document.querySelectorAll('.ch-rb.ch-rb-acts[data-rb-sid]')].map(n => n.dataset.rbSid))) void raRead(sid, true); }); // action rows: another device's taps
   } catch (_) {}
-  /* ---- Tap-to-answer buttons inside a reply (wizard-ux issue 1889, off-by-default switch wizard/reply-buttons) ----
+  /* ---- Tap-to-answer buttons inside a reply (wizard-ux issue 1889, on for everyone) ----
    * The agent writes [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]} lines (core/chat-kit.js buttonGroups);
    * the reply draws each group's buttons where its line sits. A tap marks the button picked on the tap frame (the
    * group's others dim) and joins this thread's batch; RB_BATCH_MS after the last tap the batch goes as ONE ordinary
@@ -184,8 +184,7 @@
    * thread draws that message as a machine line (core/chats-attach.js). What is picked is read back from the thread's
    * own history (so a reload and every other device see it) plus this device's taps not landed yet; a group can be
    * changed until the agent has replied after its tap. */
-  const RB_SWITCH = 'wizard/reply-buttons', RB_BATCH_MS = 3000, RB_MAX_WAIT_MS = 10000, RB_LOCAL_MS = 10 * 60e3;
-  const rbOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(RB_SWITCH); } catch (_) { return false; } };
+  const RB_BATCH_MS = 3000, RB_MAX_WAIT_MS = 10000, RB_LOCAL_MS = 10 * 60e3;
   const rbLocal = new Map(); // `${thread}\n${message}\n${group}` -> { button, label, at } (tapped here, not in the history yet)
   const rbBatch = new Map(); // thread -> { taps: [], t, first, send }
   const rbKey = (sid, msg, group) => `${sid}\n${msg}\n${group}`;
@@ -216,15 +215,15 @@
     for (const msg of [g.msg, ...(Array.isArray(g.also) ? g.also : [])]) { const q = picks?.get(`${msg}\n${g.group}`); if (q && (!p || Number(q.at) > Number(p.at))) p = q; }
     return p;
   }
-  /* ---- Action buttons (wizard-ux issue 1973, off-by-default switch wizard/reply-actions, on top of wizard/reply-buttons) ----
+  /* ---- Action buttons (wizard-ux issue 1973, off-by-default switch wizard/reply-actions, on top of the reply buttons) ----
    * A button that declares "action":{"app","tool","args"} acts on that app directly with no agent turn: the tap posts only
    * which button it was (thread, message, group, button) to the Agent Service (POST /wizard/v1/reply-actions), which reads
    * the action from that message in the thread's own history and calls the app on the thread's agent's grant. Its answer
    * (the pick and one machine line, or the failure with Retry) is saved on the box per thread and read back here
    * (GET ?thread=), so a reload and every other device show it. No outbox, no model: a missing model list can't fail it.
-   * Buttons without an action, and everything with the switch off, keep the reply-buttons behaviour above. */
+   * Buttons without an action, and everything with the switch off, keep the reply buttons behaviour above. */
   const RA_SWITCH = 'wizard/reply-actions', RA_FRESH_MS = 30e3, RA_PATH = '/wizard/v1/reply-actions';
-  const raOn = () => { try { return rbOn() && String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(RA_SWITCH); } catch (_) { return false; } };
+  const raOn = () => { try { return String(document.documentElement.dataset.tweaks || '').split(/\s+/).includes(RA_SWITCH); } catch (_) { return false; } };
   const raThreads = new Map(); // thread -> { at, read, recs: Map(`${message}\n${group}` -> record) }
   const raBusy = new Map(); // `${thread}\n${message}\n${group}` -> button id being run
   const raDefs = new Map(); // `${thread}\n${message}\n${group}` -> the drawn group, for an in-place repaint
@@ -342,7 +341,7 @@
   function rbTap(btn, ctx = {}) {
     const box = btn?.closest?.('.ch-rb'), id = btn?.dataset?.rb, sid = String(ctx.sid || '');
     if (!box || !id || !sid || sid === '__new__') return false;
-    if (btn.disabled || !rbOn() || typeof ctx.send !== 'function') { ctx.repaint?.(); return true; }
+    if (btn.disabled || typeof ctx.send !== 'function') { ctx.repaint?.(); return true; }
     // An action button: straight to the app through the box, no owner message and no agent turn (issue 1973).
     if (btn.hasAttribute?.('data-rb-act') && box.classList?.contains('ch-rb-acts') && raOn()) { void raTap(btn, ctx, sid); return true; }
     const msg = box.dataset.rbMsg, group = box.dataset.rbGroup, label = String(btn.textContent || '').replace(/^✓\s*/, '').trim();
@@ -363,6 +362,6 @@
   // Leaving the page sends what is waiting at once (the outbox keeps it if the network is gone).
   try { window.addEventListener('pagehide', () => { for (const sid of [...rbBatch.keys()]) void rbFlush(sid); }); } catch (_) {}
   window.WosActionCards = Object.freeze({ SCHEMA, html, paint, tap, keys: keysOf, normalize: norm, _cards: cards,
-    REPLY_SWITCH: RB_SWITCH, replyOn: rbOn, replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml,
+    replyHtml: rbHtml, replyPicks: rbPicks, replyTap: rbTap, replyFlush: rbFlush, replyMessage: rbMessage, tapLinesHtml: rbLinesHtml,
     ACTIONS_SWITCH: RA_SWITCH, actionsOn: raOn, actionsRead: raRead, _actions: raThreads });
 })();

@@ -27,15 +27,12 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
     for (const r of st?.ok ? st.rows : []) if (r.urgent && r.thread) out.add(r.thread);
     return out;
   }
-  /* Pin to top (wizard-ux issue 1887, switch wizard/inbox-pin-top, off by default): the threads in
+  /* Pin to top (wizard-ux issue 1887, on for everyone): the threads in
    * the owner's pin list (core/chat-pins.js: the box's ui-preferences pinnedChats, the same on every device; the row
    * menu's Pin to top writes it, and an agent adds to it with PATCH /wizard/v1/ui-preferences
    * {"ops":[{"op":"add","key":"pinnedChats","item":"<thread id>"}]}) rank above today's Daily, in the order pinned.
-   * Null while off, or while Pins are hidden in the Filter sheet. */
-  const IB_PIN_TOP = 'wizard/inbox-pin-top';
-  function ibPinTopOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(IB_PIN_TOP); } catch (_) { return false; } }
+   * Null while Pins are hidden in the Filter sheet. */
   function ibTops() {
-    if (!ibPinTopOn()) return null;
     try {
       if (typeof PIN !== 'undefined' && PIN?.on?.() === false) return null;
       return new Map((window.WosChatPins?.ids?.() || []).map((id, i) => [id, (i + 1) / 1000]));
@@ -262,6 +259,6 @@ window.WizCore.chatsParts.inboxrows = function ({ actMark, actNeeds, actUnread, 
   // The list model's inbox facts for a layout that draws its own list (CHATS.inboxRows).
   function inboxRowsFacts() { return ibFacts(); }
   // The row menu's word for a thread's pin (core/chats.js openRowSheet): Pin to top while the switch is on.
-  function ibPinWord(pinned) { return pinned ? 'Unpin' : ibPinTopOn() ? 'Pin to top' : 'Pin'; }
-  return { archivedRowsBody, ibMark, ibPinTopOn, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
+  function ibPinWord(pinned) { return pinned ? 'Unpin' : 'Pin to top'; }
+  return { archivedRowsBody, ibMark, ibPinWord, ibRow, ibTagFace, ibThreadRow, inboxRowsBody, inboxRowsClick, inboxRowsFacts };
 };

@@ -89,15 +89,9 @@
    * done and closes, back to where the owner was: no name, no Pick a skin, no Say hello. Only boot opens it this way. */
   let reconnect = false;
   const RECONNECT_WORDS = () => `Your AI isn\u2019t connected. Reconnect it so ${agent()} can answer.`;
-  // Bring your AI (wizard-ux issue 898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
-  // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
-  const IMPORTER = 'importer';
-  let bringOpen = false;
-  // Get set up (wizard-ux issue 1837, switch wizard/get-set-up): the import leaves the first run for Setup's optional
-  // list, so only AI sign-in stays a required step. Off: unchanged.
-  const bringOn = () => { try { if (String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up')) return false; } catch (e) {}
-    try { return isInstalled(IMPORTER); } catch (e) { return false; } };
-  const order = () => solo ? ['private'] : (asked ? ['name'] : []).concat(['ai'], offered ? ['private'] : [], ['look'], bringOn() ? ['bring'] : [], ['hello']);
+  // Get set up (wizard-ux issue 1837, on for everyone): bringing what your old AI knows (the Importer) is not a first-run
+  // step; it lives on Setup's optional Get set up list, so only AI sign-in stays a required step.
+  const order = () => solo ? ['private'] : (asked ? ['name'] : []).concat(['ai'], offered ? ['private'] : [], ['look'], ['hello']);
   const signing = () => step === 'ai' || step === 'private'; // a provider's sign-in page can show in either step
   const nextStep = () => { const all = order(), i = all.indexOf(step); return all[Math.min(all.length - 1, i + 1)] || 'hello'; };
   const prevStep = () => { const all = order(), i = all.indexOf(step); return i > 0 ? all[i - 1] : step; };
@@ -187,8 +181,6 @@
     if (!isInstalled(id)) throw Error('Installed. It is still starting; try again in a moment.');
   }
   const signinUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('connect', '1'); return x.href; } catch (e) { return u; } };
-  // The Importer drops its own title inside the Welcome card, which already says "Bring your AI".
-  const embedUrl = u => { try { const x = new URL(u, location.href); x.searchParams.set('embedded', '1'); return x.href; } catch (e) { return u; } };
   const agent = () => { try { return window.WizConfig?.agent?.() || 'Wizard'; } catch (e) { return 'Wizard'; } };
   // Browser owner boundary (wizard-os#133, box switch): the provider sign-in and the Importer are app pages, so they run
   // sandboxed (opaque origin) like any app window; the attribute must be in the markup so the first load is sandboxed.
@@ -313,18 +305,6 @@
       <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
   }
 
-  function paintBring() {
-    if (bringOpen) {
-      const a = H.app(IMPORTER);
-      return `${brand()}${dots()}<header class="wl-head wl-row"><button type="button" class="wl-back" data-wl="back" aria-label="Back">‹</button><h2 tabindex="-1">Bring your AI</h2></header>
-        <div class="wl-frame wl-embed"><iframe src="${esc(embedUrl(a?.url || ''))}"${sbx(embedUrl(a?.url || ''), IMPORTER)} allow="geolocation 'none'" title="Importer"></iframe></div>
-        <button type="button" class="wl-primary" data-wl="next">Continue</button>`;
-    }
-    return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Bring your AI</h2><p>Optional. Used ChatGPT, Claude or another agent? Bring your memories, chats and skills so ${esc(agent())} knows you from day one.</p></header>
-      <button type="button" class="wl-primary" data-wl="bring">Bring my AI</button>
-      <button type="button" class="wl-skip" data-wl="next">Not now</button>`;
-  }
-
   function paintHello() {
     const mic = !!H?.dictate;
     return `${brand()}${dots()}<header class="wl-head"><h2 tabindex="-1">Say hello</h2><p>${mic ? `Type or speak your first message to ${esc(agent())}.` : `Send your first message to ${esc(agent())}.`}</p></header>
@@ -408,9 +388,9 @@
   function paint(focus = true) {
     if (!el) return;
     const card = el.querySelector('.wl-card');
-    card.classList.toggle('wide', (signing() && !!provider) || (step === 'bring' && bringOpen));
+    card.classList.toggle('wide', signing() && !!provider);
     el.classList.toggle('wl-peek', step === 'look');
-    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'private' ? paintOffer() : step === 'look' ? paintLook() : step === 'bring' && bringOn() ? paintBring() : paintHello();
+    card.innerHTML = step === 'name' ? paintName() : step === 'ai' ? paintAI() : step === 'private' ? paintOffer() : step === 'look' ? paintLook() : paintHello();
     // Escape inside the provider's own page (same origin) still steps back; a cross-origin page keeps the Back button.
     const fr = card.querySelector('.wl-frame iframe');
     frameOff(); frameOff = () => {};
@@ -420,7 +400,7 @@
       // The page is an installed app's own page, so it is attached as that app's window (core/app-services.js): its
       // calls to its own backend, saved settings and IndexedDB go through the shell as in any app window. Without that
       // an opaque sign-in page's fetch goes out with Origin null and no cookie, and signing in never finishes.
-      const id = signing() ? provider : IMPORTER, url = H?.app?.(id)?.url, here = () => !!el && fr.isConnected && card.contains(fr);
+      const id = provider, url = H?.app?.(id)?.url, here = () => !!el && fr.isConnected && card.contains(fr);
       const offApp = url && window.WizAppServices?.attach?.(fr, { appId: id, path: url, isFront: here, isVisible: here, back: () => { if (!here()) return false; back(); return true; } });
       const detach = B.attach(fr), stop = B.onInput((f, ev) => { if (f === fr && fr.isConnected && ev.kind === 'key' && ev.type === 'keydown' && ev.key === 'Escape') back(); });
       frameOff = () => { stop(); if (typeof offApp === 'function') offApp(); detach(); };
@@ -475,7 +455,7 @@
     offered = solo || offerDue(); skipped = false; offerBusy = ''; offerError = ''; linked.clear();
     if (at === 'look' && offered) at = 'private';
     asked = !reconnect && !solo && unnamed(); after = at; saving = false; nameError = ''; prefill = agent();
-    step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = ''; bringOpen = false;
+    step = asked ? 'name' : at; provider = null; connected = false; sending = false; installing = ''; installError = ''; sendError = '';
     el = document.createElement('div');
     el.className = 'wl-overlay'; el.id = 'wosWelcome';
     el.innerHTML = `<div class="wl-card" role="dialog" aria-modal="true" aria-label="${reconnect ? 'Reconnect your AI' : solo ? 'Private AI' : 'Welcome'}"></div>`;
@@ -529,12 +509,10 @@
     else if (act === 'skip-ai' && step === 'ai') { skipped = !linked.size; log('ai:skipped'); step = nextStep(); provider = null; paint(); }
     else if (act === 'offer' && step === 'private') answer(t.dataset.offer);
     else if (act === 'why') window.WosPrivacy?.open?.('why');
-    else if (act === 'back' && step === 'bring') { bringOpen = false; paint(); }
     else if (act === 'back') { clearTimeout(pollT); provider = null; paint(); }
     else if (act === 'store') { close(); H.openStore?.(); }
     else if (act === 'palette') { window.WosSkin?.set(t.dataset.id); paint(false); }
-    else if (act === 'next') { step = nextStep(); bringOpen = false; log('step:' + step); paint(); }
-    else if (act === 'bring' && step === 'bring') { bringOpen = true; log('bring:open'); paint(); }
+    else if (act === 'next') { step = nextStep(); log('step:' + step); paint(); }
     else if (act === 'skip-name' && step === 'name' && !saving) { log('name:skipped'); fromName(); }
     else if (act === 'mic') micTap();
   }
@@ -561,8 +539,7 @@
     if (saving) return 'welcome'; // the name is being saved; it settles in a moment
     if (signing() && provider) { clearTimeout(pollT); provider = null; paint(); return 'welcome'; }
     if (step === 'private' && !solo) { step = prevStep(); paint(); return 'welcome'; }
-    if (step === 'bring' && bringOpen) { bringOpen = false; paint(); return 'welcome'; }
-    if (step === 'hello' || step === 'bring') { if (step === 'hello') { micDrop(); voiceMsg = { text: '', err: false }; } step = prevStep(); bringOpen = false; paint(); return 'welcome'; }
+    if (step === 'hello') { micDrop(); voiceMsg = { text: '', err: false }; step = prevStep(); paint(); return 'welcome'; }
     if (asked && step === after && !saving) { clearTimeout(pollT); step = 'name'; paint(); return 'welcome'; } // back to the name
     close(); log('back:close'); return 'welcome';
   }
@@ -649,8 +626,7 @@
         return true; } });
   } catch (e) { console.error(e); }
 
-  // takesSetup: the Setup tile opens this Welcome. With Get set up on (wizard-ux issue 1837) the tile opens the Setup
-  // page instead, where the optional accounts list lives; the Welcome still opens by itself while no AI is signed in.
-  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; },
-    get takesSetup() { try { return !String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes('wizard/get-set-up'); } catch (e) { return true; } } };
+  // The Setup tile opens the Setup page (Get set up, wizard-ux issue 1837), not this Welcome; the Welcome still opens by
+  // itself while no AI is signed in.
+  window.WosWelcome = { whenThreadExists, aiConnected, boot, back, open: (at) => open(at || 'ai'), close, get active() { return !!el; }, get log() { return window.__welcomeLog || []; } };
 })();

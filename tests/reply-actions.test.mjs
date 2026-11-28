@@ -1,5 +1,5 @@
 // Reply buttons that act on an app directly, with no agent turn (wizard-ux issue 1973, part 2; switch
-// wizard/reply-actions on top of wizard/reply-buttons). A button may declare "action":{"app","tool","args"}; the shell
+// wizard/reply-actions on top of the reply buttons, issue 1889). A button may declare "action":{"app","tool","args"}; the shell
 // sends only which button was tapped to the Agent Service (POST /wizard/v1/reply-actions), never an owner message, and
 // draws the box's saved outcome: the pick (✓) and one machine line, or the failure with Retry. Runs the real
 // chat-kit.js and action-cards.js for a main thread and the three routed kinds.
@@ -17,8 +17,8 @@ const rows = content => [{ id: 41, role: 'assistant', timestamp: 2, content }];
 const md = s => `<p>${s.replace(/\n+/g, ' ')}</p>`;
 const KINDS = [['main', ''], ['host-profile', 'host'], ['container', 'box'], ['restricted', 'locked']];
 
-function world({ buttons = true, actions = true, agent = '', box = {} } = {}) {
-  const docEl = { dataset: { tweaks: [buttons && 'wizard/reply-buttons', actions && 'wizard/reply-actions'].filter(Boolean).join(' ') } };
+function world({ actions = true, agent = '', box = {} } = {}) {
+  const docEl = { dataset: { tweaks: actions ? 'wizard/reply-actions' : '' } }; // reply buttons: on for everyone
   const calls = [], saved = new Map(), state = { fail: '', down: false, ...box };
   const ctx = { URL, Intl, Date, JSON, Promise, Map, Set, navigator: {}, setTimeout, clearTimeout, CSS: { escape: s => String(s) },
     location: { origin: 'https://box.example', href: 'https://box.example/wizard-os-home/' },
@@ -72,9 +72,9 @@ test('switch off: an action button looks and taps exactly like today\'s reply bu
     assert.equal(sent.length, 1, 'an owner message, as today'); assert.match(sent[0], /^Tapped Done · Workout/);
     assert.deepEqual(w.calls, [], 'the box is never asked');
   }
-  // Reply buttons off: no buttons at all, whatever the action switch says.
-  assert.equal(world({ buttons: false }).AC.replyOn(), false);
-  assert.equal(world({ buttons: false }).AC.actionsOn(), false);
+  // Reply buttons are on for everyone (switch wizard/reply-buttons removed): the action switch alone decides.
+  assert.equal(world().AC.actionsOn(), true);
+  assert.equal(world({ actions: false }).AC.actionsOn(), false);
 });
 
 for (const [kind, agent] of KINDS) {

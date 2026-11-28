@@ -4,7 +4,7 @@
 // stream, which replays the same reply from its first event. Before the fix the replay stayed under the reply as a
 // second copy ("Replying…/Finishing…") because the transcript's plain text keeps the buttons' labels and the stream
 // drops them. Main and routed threads (host profile, container, restricted agents) each. While the replay is still arriving (no terminal frame yet) it may show as before (a new run can begin
-// with an old answer's words); once the run has ended it must be gone. Phone 412x915 and desktop 1440x900 (Classic), Nebula and Grove, switch wizard/reply-buttons on.
+// with an old answer's words); once the run has ended it must be gone. Phone 412x915 and desktop 1440x900 (Classic), Nebula and Grove, reply buttons on for everyone.
 // Synthetic transport only: EventSource is faked (the test pushes the frames), writes are refused or answered in memory.
 //   QA_EXPECT=broken (QA_WEB=<main checkout>/web) records main: two copies.
 // Screens in QA_OUT: <shell>-<skin>[-main].png (+ -reload).
@@ -40,7 +40,7 @@ async function boot(browser, shell, skin, entry) {
   await context.addInitScript(({ shell, skin }) => {
     if (window !== top) return;
     for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/reply-buttons': true } }) })) localStorage.setItem(k, v);
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) localStorage.setItem(k, v);
     const open = window.__qaES = []; let seq = 0;
     window.EventSource = class { constructor(url) { this.url = url; this.on = {}; open.push(this); setTimeout(() => this.onopen?.(), 0); }
       addEventListener(n, f) { (this.on[n] ||= []).push(f); } removeEventListener() {} close() { this.closed = true; } };
