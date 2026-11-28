@@ -38,6 +38,16 @@ test('a newer reply on the box keeps the saved copy unpainted', async () => {
   h.setDetail({ session: { ...row, wizard_last_assistant_at: 201 } });
   assert.equal(await h.L.verifiedCopy(row.id), null);
 });
+test('a list read that lands during the detail read and names a newer reply wins over a matching detail', async () => {
+  const h = await saved();
+  const release = h.deferDetail();
+  const pending = h.L.verifiedCopy(row.id);
+  // The resume's list read lands first and already shows the newer reply; the detail read answered for the old one.
+  h.L.cached = false; h.L.at = Date.now() + 1;
+  h.L.sessions[0] = { ...h.L.sessions[0], messageCount: 4, lastAssistantAt: new Date(300e3).toISOString() };
+  release();
+  assert.equal(await pending, null);
+});
 test('an older service whose detail names no reply times never vouches', async () => {
   const h = await saved();
   const { wizard_last_user_at, wizard_last_assistant_at, ...older } = row;

@@ -1398,6 +1398,9 @@
       const s = normalize(raw?.session || raw);
       // An older service names no reply times on this read: it can't vouch, so nothing paints early.
       if (!s || s.id !== id || !Number.isSafeInteger(s.messageCount) || !(s.lastAssistantAt || s.lastUserAt)) return null;
+      // A list read that landed meanwhile is newer than this answer's question: when it names other messages, it wins.
+      const now = L.session(id);
+      if (L.listTrusted() && now && ckOf(now) !== want) return null;
       return ckOf(s) === want && TC.get(id) === c ? c.rows : null;
     })().catch(() => null).finally(() => { if (VERIFY.get(id) === p) VERIFY.delete(id); });
     VERIFY.set(id, p); return p;
