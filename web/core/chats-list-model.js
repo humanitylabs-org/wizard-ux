@@ -434,7 +434,10 @@ function activityGroups(groups, { needs, unread, at }, { order = 'newest', inbox
     // he asked for or set up is in Inbox even when the box marked the run quiet), so here it is not read twice. With it
     // off the shell's quiet(s) is always false (live.js quietReply, issue 1962), so nothing is kept out for being quiet.
     const ibQuiet = place?.smart ? () => false : inbox.quiet;
-    const own = s => inInbox(s) && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
+    // `own` asks whether it would be in Inbox without his pin: Smart inbox's delivered-pin rule (issue 1927) is left out
+    // for a pinned-to-top thread, so a read one stays uncounted with Smart inbox on too.
+    const ownFacts = { ...placeFacts, pinned: s => !top(s) && placeFacts.pinned(s) };
+    const own = s => placeOf(s, place?.sent?.get?.(s.id), ownFacts) === 'inbox' && (base(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
     const want = s => top(s) || inInbox(s) && (pin(s) > 0 || inboxWants(s, { needs, unread, quiet: ibQuiet }));
     const ready = [], seen = new Set(work.map(s => s.id));
     for (const s of [...rest, ...live]) {

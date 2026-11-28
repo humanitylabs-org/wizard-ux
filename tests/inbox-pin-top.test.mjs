@@ -58,6 +58,18 @@ test('list model: a read pinned thread does not change the count; an unread one 
   assert.ok(ids(unreadQuiet.counted).includes('m1'), 'unread: counted');
 });
 
+test('list model, Smart inbox on: a read thread in Inbox only because the owner pinned it is not counted; unread counts', () => {
+  // Smart inbox (issue 1927) delivers a pinned thread's readable reply to Inbox; that pin alone must not add to the count.
+  const pins = new Set(['m1', 'read1']), tops = withTops([...pins]);
+  const place = { smart: true, sent: new Map(), pinned: s => pins.has(s.id) };
+  const noPin = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: withTops([]), place: { ...place, pinned: () => false } });
+  const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: tops, place });
+  assert.deepEqual(ids(g.ready).slice(0, 2), ['m1', 'read1'], 'both shown on top');
+  assert.deepEqual(ids(g.counted), ids(noPin.counted), 'the count is what it was before the pins');
+  const fresh = M.activityGroups(groups(ROWS().map(s => s.id === 'm1' ? { ...s, fresh: true } : s)), facts, { now: NOW, inbox: tops, place });
+  assert.ok(ids(fresh.counted).includes('m1'), 'unread: counted');
+});
+
 test('list model: without top facts (Pins hidden) the groups are exactly today\'s', () => {
   const g = M.activityGroups(groups(ROWS()), facts, { now: NOW, inbox: { quiet, pin: base } });
   assert.equal('counted' in g, false);
