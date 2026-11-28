@@ -264,7 +264,7 @@ window.WizCore.chatsParts.drafts = function ({ ago, ch, CH, chatsBack, clip, elO
   function noteMoreHtml(NV) {
     if (noteQuiet()) return '';   // the quiet thread lists them in its own stack (noteStackHtml)
     const sib = noteSiblings(NV.item); if (!sib.length) return '';
-    const from = noteSrcName(NV.item), shown = sib.slice(0, 5);   // short: the thread's actions stay clear of it
+    const from = noteSrcName(NV.item), shown = sib.slice(0, 50);   // all of them, up to 50, to bulk-process (issue 2059)
     return `<section class="ch-notif-more" aria-label="More from ${esc(from)}"><div class="ch-notif-more-h"><span>More from ${esc(from)} · ${sib.length}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${sib.length + 1}</span></button></div>${shown.map(i => `<button type="button" class="ch-notif-more-i${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${esc(ago(new Date(noteAt(i)).toISOString()))}</time></button>`).join('')}${sib.length > shown.length ? `<p class="ch-notif-more-x">and ${sib.length - shown.length} more · the next ones move up as you finish these</p>` : ''}</section>`;
   }
   /* Quiet thread stack (Miguel, 4 Nov 2026: "as I click through each one it's unclear which one is expanded"): every
@@ -276,7 +276,8 @@ window.WizCore.chatsParts.drafts = function ({ ago, ch, CH, chatsBack, clip, elO
     const lone = `<div class="msg a ch-notif is-quiet" data-morph-key="notif:${esc(NV.id)}">${body}${acts}</div>`;
     if (!sib.length) return lone + noteRouteQuiet(NV);
     const all = [cur, ...sib].sort((a, b) => noteAt(b) - noteAt(a)), at = all.findIndex(i => i.id === cur.id);
-    const MAX = 6, from = Math.max(0, Math.min(at - 2, all.length - MAX)), shown = all.slice(from, from + MAX), rest = all.length - from - shown.length;
+    // up to 50 waiting from this source show (wizard-ux issue 2059, Miguel: "let me bulk process it"); past that "and N older"
+    const MAX = 50, from = Math.max(0, Math.min(at - 2, all.length - MAX)), shown = all.slice(from, from + MAX), rest = all.length - from - shown.length;
     const src = noteSrcName(cur), stamp = i => esc(ago(new Date(noteAt(i)).toISOString()));
     const card = i => i.id === cur.id
       ? `<div class="msg a ch-notif is-quiet is-open" data-morph-key="notif:${esc(NV.id)}" aria-current="true"><div class="ch-ncard-h"><b>${esc(clip(noteTitle(i), 160))}</b><time>${stamp(i)}</time></div>${body}${acts}</div>`
