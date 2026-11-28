@@ -21,10 +21,10 @@ const MD = '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
 const NEEDS = `<div class="ch-needs-line" data-needs-line role="status"><span class="ch-post-st needs"><i class="ch-chan-dot" aria-hidden="true"></i>Needs you</span><span class="ch-needs-ask">clipped…</span><button type="button" class="ch-needs-done" data-chmarkdone>${MD}Mark done</button></div>`;
 
 // The real turnHtml (and the card it draws) with the real summary rules; `tweaks` is the root's data-tweaks.
-function render(rows, { tweaks = '', summary = false, needsCard = null, start = 'collapsed', chosen = null } = {}) {
+function render(rows, { tweaks = '', summary = false, needsCard = null, start = 'collapsed', chosen = null, media = '' } = {}) {
   const ctx = { getComputedStyle: () => ({ getPropertyValue: name => name === '--wos-reply-summary' && summary ? ' on' : '' }),
     document: { documentElement: { dataset: { tweaks } } }, window: { WizConfig: { agent: () => 'Fixture' }, WosSkinHost: { replySummary: { get: () => ({ start }) } } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
-    replyCard: () => '', msgIds: () => '', quoteBtn: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
+    replyCard: () => '', msgIds: () => '', quoteBtn: () => '', userMedia: () => '', mediaBlock: () => media, clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
   modelContext(ctx);
   vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
   const c = { texts: [], ...(chosen ? { rsum: new Map(chosen) } : {}), ...(needsCard ? { needsCard } : {}) };
@@ -58,6 +58,14 @@ test('on: a needs-you reply opens with one card: Needs you, the full summary onc
   assert.ok(html.indexOf('ch-rcard') < html.indexOf('data-reply-details') && html.indexOf('data-reply-details') < html.indexOf('word159'), 'card first, then the full reply');
   assert.ok(html.indexOf('data-reply-details') < html.indexOf('data-rb="book"') || !html.includes('data-rb='), 'reply buttons sit in the full reply');
   assert.match(html, /data-mcopy="0"/, 'Copy still copies the full reply');
+});
+
+test('on: attachments and the reply\'s picks fold with the full reply (Codex P2), off they stay where they are', () => {
+  const on = render(rows(), { tweaks: ON, media: '<div class="mfile">photo.png</div>' }).html;
+  const det = on.indexOf('<div class="rdet" data-reply-details="2000" hidden>');
+  assert.ok(det > 0 && on.indexOf('photo.png') > det && on.indexOf('photo.png') < on.lastIndexOf('<div class="mmeta">'), 'inside the folded block');
+  const off = render(rows(), { summary: true, media: '<div class="mfile">photo.png</div>' }).html;
+  assert.ok(off.includes('</div><div class="mfile">photo.png</div></div><div class="mmeta">'), 'off: after the reply, as before');
 });
 
 test('on: Show less when the owner opened it or replies start expanded; Your call, Done and FYI states; no Mark done without Needs you', () => {
