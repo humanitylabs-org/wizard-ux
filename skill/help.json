@@ -385,10 +385,6 @@
       "help": "Chats are tagged from what they are about; a channel's What goes here… edits its list.",
       "where": "Settings › Appearance › Try new features › Automatic chat tags"
     },
-    "wizard/first-chat-goals": {
-      "help": "Five picks, then a first win.",
-      "where": "Settings › Appearance › Try new features › Five-choice first chat"
-    },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
       "where": "Settings › Appearance › Try new features › Private first setup"
@@ -632,7 +628,8 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
-    "Pin to top": "on for everyone: a pinned thread stays first in Inbox.",
+    "Pin to top": "on for everyone: pins stay first in Inbox.",
+    "Five-choice first chat": "on for everyone: a first chat opens with five choices to tap.",
     "Backup health in Resources": "on for everyone: Home › Resources › Health.",
     "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",
     "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",
