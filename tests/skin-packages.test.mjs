@@ -53,6 +53,17 @@ test('every declared package exists, and every package folder is declared', () =
   }
 });
 
+// Skins are look only (wizard-ux#1190): a package is a stylesheet; no skin declares a script, and committing one imports
+// nothing.
+test('no skin package declares a script, and committing a skin imports no skin.js', async () => {
+  assert.deepEqual(skinEntries().filter(s => s.pkg?.js).map(s => s.id), []);
+  const P = page({ stored: 'nebula' });
+  P.ctx.window.WosSkin.pkgOf = x => (x === 'fixture' ? { js: true, when: 'always', dir: 'fixture' } : null);
+  P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
+  assert.equal(P.host.state.active, null);
+  assert.ok(!P.imported.some(u => /skin\.js/.test(u)), 'skin.js never imported');
+});
+
 /* ---------- lint: a package stays in its own lane ---------- */
 // Split a selector list on top-level commas only (commas inside :is(...) stay).
 const splitTop = s => { const out = []; let d = 0, cur = ''; for (const ch of s) { if (ch === '(') d++; if (ch === ')') d--; if (ch === ',' && !d) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.filter(x => x.trim()); };
@@ -83,33 +94,6 @@ test('skin.css rules apply only under their own skin', () => {
   }
 });
 
-test('skin.js uses only the skin API', async () => {
-  const banned = ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest',
-    '__wos', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'history.', 'document.cookie', 'eval(', 'new Function', 'import(', 'WebSocket'];
-  const files = [...pkgDirs().keys()].map(d => `web/skins/${d}/skin.js`).filter(f => existsSync(new URL(f, root)));
-  files.push('tests/fixtures/skins/fixture/skin.js');
-  for (const f of files) {
-    const src = read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    for (const b of banned) assert.ok(!src.includes(b), `${f}: "${b}" is not allowed in a skin script; use the skin API (web/skins/README.md)`);
-    assert.equal(typeof (await import(new URL(f, root).href)).default, 'function', `${f}: export default function setup(api)`);
-  }
-  // And every packaged skin script (plus the fixture) runs through the real host on the API alone, leaving nothing behind.
-  const scripted = skinEntries().filter(s => s.pkg?.js).concat([{ id: 'fixture', pkg: { js: true, when: 'touch', dir: 'fixture' } }]);
-  assert.ok(scripted.length >= 2, 'a real package script plus the fixture');
-  for (const { id, pkg } of scripted) {
-    const P = page({ stored: 'nebula' });
-    P.ctx.window.WosSkin.pkgOf = x => (x === id ? { ...pkg } : null); // a family entry may share the skin's id
-    const warns = []; P.ctx.console.warn = (...a) => warns.push(a.map(String).join(' '));
-    P.host.attach(P.adapter); P.host.commit(id); await settle();
-    assert.deepEqual(warns, [], `${id}: its setup threw nothing`);
-    assert.equal(P.host.state.active, id, `${id}: its setup ran through the skin API`);
-    assert.deepEqual(plain(P.host.state.disabled), [], `${id}: no error turned it off`);
-    P.host.commit('grove'); await settle();
-    assert.equal(P.host.state.active, null);
-    assert.equal(P.live, 0, `${id}: no listener survives a switch`);
-    assert.equal(P.frames.size, 0, `${id}: no frame survives a switch`);
-  }
-});
 
 /* ---------- the host, in a small fake page ---------- */
 function page({ stored = 'nebula', touch = true } = {}) {
@@ -187,20 +171,6 @@ test('previewing skins in the picker never runs a skin script', async () => {
   assert.deepEqual(plain(P.host.state.css), ['landscapes'], 'stylesheets only, and only for skins actually previewed');
 });
 
-test('committing a skin runs its script; switching away twice leaves zero listeners, frames and handlers', async () => {
-  const P = page({ stored: 'nebula' });
-  P.host.attach(P.adapter);
-  P.host.commit('fixture'); await settle();
-  assert.equal(P.host.state.active, 'fixture');
-  assert.ok(P.live > 0, 'fixture registered listeners'); assert.ok(P.frames.size > 0);
-  P.host.commit('nebula'); await settle();
-  P.host.commit('fixture'); await settle();
-  P.host.commit('grove'); await settle();
-  assert.equal(P.host.state.active, null);
-  assert.equal(P.live, 0, 'no listener survives a switch');
-  assert.equal(P.frames.size, 0, 'no frame survives a switch');
-  assert.equal(globalThis.__fixtureSkin.tornDown, true);
-});
 
 test('a touch-only skin script never loads on desktop', async () => {
   const P = page({ stored: 'nebula', touch: false });
@@ -208,71 +178,9 @@ test('a touch-only skin script never loads on desktop', async () => {
   assert.equal(P.imported.length, 0); assert.equal(P.host.state.active, null);
 });
 
-test('a skin swipe-back runs the shell Back step: thread -> list, the app never exits', async () => {
-  const P = page({ stored: 'fixture' });
-  P.host.attach(P.adapter); await settle();
-  assert.equal(P.host.state.active, 'fixture');
-  P.thread.fire('pointerdown', { clientX: 40, pointerId: 7 });
-  assert.equal(P.host.claimed(7), true, 'the finger is claimed from the dock desk swipe');
-  P.thread.fire('pointerup', { clientX: 200, pointerId: 7 });
-  assert.deepEqual(P.backs, ['thread']);
-  assert.equal(P.adapter.route().view, 'list', 'one in-app step');
-  // At the root, a second swipe does nothing (the gesture checks the route; nav.back() returns false).
-  P.thread.fire('pointerdown', { clientX: 40, pointerId: 8 });
-  P.thread.fire('pointerup', { clientX: 200, pointerId: 8 });
-  assert.deepEqual(P.backs, ['thread']);
-  // Starting in the OS edge strip belongs to the OS.
-  P.setRoute({ view: 'thread', thread: 's2', desk: 1 });
-  P.thread.fire('pointerdown', { clientX: 10, pointerId: 9 });
-  P.thread.fire('pointerup', { clientX: 200, pointerId: 9 });
-  assert.deepEqual(P.backs, ['thread']);
-});
 
-test('render and route events reach the skin, and frames are tracked', async () => {
-  const P = page({ stored: 'fixture' });
-  P.host.attach(P.adapter); await settle();
-  P.host.rendered('thread', P.thread); P.host.rendered('thread', P.thread);
-  assert.equal(globalThis.__fixtureSkin.renders, 2);
-  assert.deepEqual(globalThis.__fixtureSkin.routes, ['thread']);
-  P.setRoute({ view: 'list', thread: null, desk: 1 }); P.host.changed();
-  assert.deepEqual(globalThis.__fixtureSkin.routes, ['thread', 'list']);
-  P.tick(); assert.equal(globalThis.__fixtureSkin.framed, true); assert.equal(P.host.state.frames, 0);
-});
 
-test('a broken skin script turns itself off after three errors: one toast, stylesheet kept, no retry', async () => {
-  const P = page({ stored: 'nebula' });
-  P.host._test.setImporter(async () => ({ default: api => { api.on('render', () => { throw new Error('boom'); }); } }));
-  P.host.attach(P.adapter);
-  P.host.commit('landscapes'); // css only: stays
-  P.host.commit('fixture'); await settle();
-  assert.equal(P.host.state.active, 'fixture');
-  for (let i = 0; i < 5; i++) P.host.rendered('thread', P.thread);
-  assert.equal(P.host.state.active, null, 'script unloaded');
-  assert.deepEqual(plain(P.host.state.disabled), ['fixture']);
-  assert.equal(P.toasts.length, 1, 'exactly one toast');
-  assert.ok(P.host.state.css.includes('landscapes'), 'stylesheets stay');
-  P.host.commit('nebula'); P.host.commit('fixture'); await settle();
-  assert.equal(P.host.state.active, null, 'no retry on this page');
-});
 
-test('the API hands a skin no shell internals', async () => {
-  const P = page({ stored: 'nebula' });
-  let seen = null;
-  P.host._test.setImporter(async () => ({ default: api => { seen = api; } }));
-  P.host.attach(P.adapter); P.host.commit('fixture'); await settle();
-  // Layout hooks (22 Oct 2026): timers, own controls, agents, the orb's recorder and its idle tap. Still no internals.
-  // Now playing (4 Nov 2026): api.media lists and pauses what the apps play; it reaches no frame or element.
-  assert.deepEqual(Object.keys(seen).sort(), ['after', 'agents', 'app', 'asset', 'env', 'frame', 'gesture', 'listen', 'media', 'mount', 'nav', 'on', 'orb', 'part', 'route', 'storage', 'toast', 'voice']);
-  assert.ok(Object.isFrozen(seen.media)); assert.deepEqual(Object.keys(seen.media).sort(), ['icon', 'list', 'open', 'pause', 'pauseAll', 'play', 'toggle', 'watch']);
-  assert.ok(Object.isFrozen(seen.agents) && Object.isFrozen(seen.voice) && Object.isFrozen(seen.orb));
-  assert.deepEqual(Object.keys(seen.voice).sort(), ['cancel', 'dictate', 'state', 'talk', 'tap']);
-  // The app in front may lend the orb its main button (WizardApp.orb.claim): a frozen snapshot and a tap, nothing else.
-  assert.ok(Object.isFrozen(seen.app)); assert.deepEqual(Object.keys(seen.app).sort(), ['orb', 'tap']);
-  assert.ok(Object.isFrozen(seen) && Object.isFrozen(seen.nav));
-  assert.deepEqual(Object.keys(seen.nav).sort(), ['back', 'deskCount', 'goDesk', 'openList', 'openThread']);
-  seen.storage.set('x', { a: 1 });
-  assert.equal(P.ctx.localStorage._['wos.skin.fixture.x'], '{"a":1}', 'storage is namespaced per skin');
-});
 
 // The phone shell's skin adapter (app-agentorb.js) and its dock desk swipe (app-scrub.js), run with stubs.
 const braces = (src, head) => { const i = src.indexOf(head); assert.ok(i >= 0, head); let d = 0; for (let k = src.indexOf('{', i); k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) return src.slice(i, k + 1); } return ''; };

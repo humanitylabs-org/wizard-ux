@@ -16,7 +16,6 @@
     "miguel/now-playing",
     "miguel/calm-offline",
     "wizard/failure-reason",
-    "wizard/skins-look-only",
     "wizard/update-bug-reports",
     "wizard/link-token-repair",
     "wizard/assist-agent-note",
@@ -48,6 +47,5 @@
   "promotedDefaults": [],
   "aliases": {
     "wizard/machines-home": "miguel/machines-home"
-  },
-  "lookOnlyOff": []
+  }
 }

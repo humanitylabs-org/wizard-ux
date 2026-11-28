@@ -69,17 +69,21 @@ Storage & backups: disk space and backups, filled by the apps that handle them. 
 
 ### Appearance
 Appearance: the skin (look), colors, mode, background, desktop view, window opacity, and Try new features.
-- Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which the agent can change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
-  - Colors: the colors of the chosen skin
+- Skins: one list of skins, every color plus your own skins; + New skin makes your own skin (a name, a base skin and a color), which you can then ask the agent to change ('change my <name> skin so…'). A skin is a look only: it never turns features on or off. Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).
+  - Skins: every color and your own skins in one row; + New skin adds one
   - Mode: Dark or Light, for skins that have both
   - Background: Plain, pictures, or (some skins) your own image with Choose image
   - Shell view: desktop only: how this desktop is laid out, chosen per device
-  - Try new features: the feature switches (For testers channel only), see Feature switches below
   - Desks: the classic desktop: a top bar, desks of windows
   - AI apps: chats in a sidebar on the left, the chat in the middle, apps on the right (like the ChatGPT and Claude apps); the standard desktop view
 - Windows › Window opacity: a slider for how see-through every window and app is, on this device; Use skin default puts it back.
 - Home: a switch for Machines on Home, shown here only when it is on for everyone.
 - Advanced › Import skin JSON: apply a skin file (up to 8 KB) on this device.
+
+### Try new features
+Try new features: the feature switches, its own page in Settings (For testers channel only). See Feature switches below. (only on the For testers channel, when there are switches).
+- Try new features: unfinished features you can switch on to try, A to Z, each labelled with who made it.
+  - Try new features: the feature switches, see Feature switches below
 
 ### Chats & app screens
 Chats & app screens: how Chats behaves and looks, which Chats app is the default, and app screens.
@@ -157,9 +161,9 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 - Orb switcher: choose what holding or swiping the orb offers on the phone. (phone).
 - Downloads: files you downloaded in Wizard apps, with their progress; reopens the Downloads sheet. (Android app).
 
-## Feature switches (Settings › Appearance › Try new features)
+## Feature switches (Settings › Try new features)
 
-Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device.
+Settings › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device.
 
 - **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
@@ -189,9 +193,8 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Result reader**: A private model files each finished background task.
 - **Send and go**: On desktop, sending opens a fresh chat.
 - **Share feature counts**: Sends features you tried and your thumbs, plus a random box id.
-- **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Appearance › Try new features › Short answer first; its options show under it when on.
+- **Short answer first**: A long agent reply shows only its one-line plain answer; tap it for the full reply. Choose whether replies start collapsed and how long the short answer is. Where: Settings › Try new features › Short answer first; its options show under it when on.
 - **Side button opens the Agent chat**: Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.
-- **Skins are look only**: Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.
 - **Smart inbox: only what needs you**: Inbox: only what blocks you.
 - **Tap to answer in replies**: Tap-to-answer buttons in agent replies.
 - **Tell the team about failed updates**: When an app or WizardOS update fails on this box, the App Manager files a bug for the team (or adds to the open one) with the box, versions, failing step and error, using this box's GitHub login. Your notification then says the team was told.
@@ -216,7 +219,7 @@ No longer switches (owners and old chats may still name them):
 
 ## How do I…
 
-- **Turn on a new feature (or get them first)?** Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.
+- **Turn on a new feature (or get them first)?** Settings › About & updates › Channel › For testers (if not already), then Settings › Try new features › the feature's switch.
 - **Turn on Channels?** Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)
 - **Make Wizard update automatically?** Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).
 - **Is my Mac app (Wizard for Mac) up to date?** Inside Wizard for Mac: Settings › About & updates › Wizard for Mac shows its version and Up to date, or the new version downloading; Check for updates looks now, Update and restart installs a ready one, Download gets a release that needs a new download. Not shown in a browser or on the phone.

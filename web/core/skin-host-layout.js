@@ -12,7 +12,7 @@ window.WizCore.skinHostParts = window.WizCore.skinHostParts || {};
 window.WizCore.skinHostParts.layout = function ({ builtins, chatsClaimed, isDoc, layoutDiagnostic, layoutFile, layoutOf, requested, skinHostVars, stamp }) {
   let insetPlaces, insetSync, placeSync, tweaks; // late-bound: skin-host.js declares these after the call, see bindLate
 
-  const layers = () => [...builtins.values(), skinHostVars.active, skinHostVars.personal, skinHostVars.layoutRec, ...tweaks.values()].filter(Boolean);
+  const layers = () => [...builtins.values(), skinHostVars.active, skinHostVars.layoutRec, ...tweaks.values()].filter(Boolean);
   function emit(type, payload) {
     for (const a of layers()) for (const fn of [...(a.on[type] || [])]) fn(payload);
   }

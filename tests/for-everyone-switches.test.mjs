@@ -107,7 +107,7 @@ function settingsSlice(marker, state, extra = {}) {
 const TWEAKS = [{ id: 'miguel/send-and-go', name: 'Send and go', author: 'miguel', on: true }, { id: 'wizard/view-x', name: 'X view', view: true, on: false }];
 
 test('Settings and the Tracker share one switch: "Try new features" only on For testers, written through WosLookSync', async () => {
-  const draw = state => { const c = settingsSlice('  function tweakRows(', state); return vm.runInContext('tweakRows({})', c); };
+  const draw = state => { const c = settingsSlice('  function tweakRows(', state); return vm.runInContext("tweakRows({}, 'try') + tweakRows({}, 'look')", c); };
   const testers = draw({ tweaks: TWEAKS, channel: 'latest', shell: 'phone' });
   assert.match(testers, /<div class="tw-group" data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p><div class="tw-list"><sw data-tweak-toggle id="miguel\/send-and-go" on><\/div><\/div>/);
   assert.match(testers, /<h4>Views<\/h4><div class="tw-list"><sw data-tweak-toggle id="wizard\/view-x" where="Phone view"><\/div>/, 'views stay their own list');
@@ -154,18 +154,3 @@ test('os-updates stores the channel before it broadcasts it, so a deferred exper
   assert.equal(b.E.state.locked, true);
 });
 
-test('the New skin draft does not list feature switches, so it cannot flip one (only built-ins and views)', async () => {
-  const E = { installedReady: true, groups: () => [], state: { tweaks: [{ id: 'wizard/builtin', builtin: true }] },
-    installed: async () => [{ id: 'wizard/builtin' }, { id: 'wizard/view-x', view: true }, { id: 'miguel/send-and-go' }],
-    defaults: async () => ({ 'wizard/builtin': true, 'miguel/send-and-go': true }) };
-  const c = runRecording(block(SETTINGS, '  async function draftDefaults('), { window: { WosExperience: E } });
-  const draft = {}, renders = []; const ctx = { skinDraft: draft, render: () => renders.push(1) };
-  await vm.runInContext('draftDefaults', c)(ctx, 'obsidian');
-  assert.deepEqual(draft.items.map(t => t.id), ['wizard/builtin', 'wizard/view-x'], 'feature switches are not listed');
-  assert.equal(draft.tweaks['miguel/send-and-go'], true, 'their current state is carried over unchanged');
-  // The real click line: a stale draft switch (not in the list) cannot be flipped; a listed one can.
-  const line = SETTINGS.slice(SETTINGS.indexOf('      if (tweak) { const id = tweak.dataset.draftTweak;'));
-  const tap = id => { const run = new Function('tweak', 'draft', 'ctx', line.slice(0, line.indexOf('\n')) + '\nreturn false;'); return run({ dataset: { draftTweak: id } }, draft, ctx); };
-  assert.equal(tap('miguel/send-and-go'), true); assert.equal(draft.tweaks['miguel/send-and-go'], true, 'a stale draft switch cannot be flipped');
-  assert.equal(tap('wizard/builtin'), true); assert.equal(draft.tweaks['wizard/builtin'], false, 'a built-in in the draft flips');
-});

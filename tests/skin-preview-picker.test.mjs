@@ -18,11 +18,10 @@ test('skin picker renders preview cards for every skin, names in each skin\'s ow
   h.root.querySelectorAll = sel => (sel === '.skp-wait' ? [{ classList: { remove: c => cls.push(c) } }] : []);
   assert.match(html, /class="skp-all skp-wait"/, 'names hidden until the faces load');
   assert.doesNotMatch(html, /class="sk-dot"/, 'no dot swatches left');
-  // James, 31 Oct / 1 Nov 2026 (#801/#803): a skin and its color are separate choices; #755 flattening is superseded.
-  const families = html.match(/aria-label="Skins">([\s\S]*?)<div class="skp-colours">/)?.[1] || '';
-  for (const f of S.families) assert.match(families, new RegExp(`data-skinfamily="${f.id}"`), 'Skin has its own family controls');
-  assert.doesNotMatch(families, /data-skinpick=/, 'never flatten colors into skins');
-  assert.match(html, /<h4>Colors<\/h4>/, 'Color has its own scoped group');
+  // James, 25 Nov 2026 (wizard-ux#1190): skins are a look only, so every colour is a look in one list.
+  assert.match(html, /<h4>Skins<\/h4>/);
+  assert.doesNotMatch(html, /data-skinfamily=/, 'no separate family controls');
+  for (const f of S.families) for (const id of f.palettes.filter(id => !/^landscapes/.test(id))) assert.match(html, new RegExp(`data-skinpick="${id}"`), id);
   // Each Wizard colour is a preview card (its own tokens) with the name set in its own face.
   for (const id of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
     const k = S.list.find(x => x.id === id);

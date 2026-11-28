@@ -64,21 +64,18 @@ function lookPage(shell = 'phone', experience) {
   return { ...settingsView({ shell, WosSkin, WosMySkin, WosExperience: experience }), picked, WosSkin };
 }
 
-test('Settings › Look separates family tiles from family-scoped Colours, without a Chats pairing', async () => {
+// Skins are look only (wizard-ux#1190, James 25 Nov 2026): Look is one list of skins, own skins included.
+test('Settings › Look is one list of skins: every colour, then own skins, without a Chats pairing', async () => {
   const h = lookPage();
   const html = h.html();
-  const skins = html.match(/<div class="skp skp-families" role="group" aria-label="Skins">([\s\S]*?)<\/div>/)?.[1] || '';
-  assert.match(skins, /data-skinfamily="wizard"/); assert.match(skins, /data-skinfamily="mizel"/);
-  assert.match(skins, /data-ownskin="own-1"[^>]*>[\s\S]*Quiet morning/, 'own skins stay in the family row');
-  assert.doesNotMatch(skins, /data-skinpick=/, 'colours are not skins');
-  assert.match(html, /<h4>Colors<\/h4>/);
-  assert.match(html, /data-skinpick="nebula"/); assert.match(html, /data-skinpick="grove"/);
-  assert.doesNotMatch(html, /data-skinpick="obsidian/, 'only the chosen family supplies colours');
+  const looks = html.match(/<div class="skp" role="group" aria-label="Skins">([\s\S]*?)<\/div><\/div>/)?.[1] || '';
+  for (const id of ['nebula', 'grove', 'obsidian', 'obsidian-light']) assert.match(looks, new RegExp(`data-skinpick="${id}"`), id);
+  assert.match(looks, /data-ownskin="own-1"[^>]*>[\s\S]*Quiet morning/, 'own skins are looks in the same row, under their own names');
+  assert.doesNotMatch(html, /data-skinfamily=/, 'no family tiles');
   assert.doesNotMatch(html, /data-chats-suggest|suggestion/, 'no Chats pairing');
-  h.act('look', 'data-skinfamily', 'mizel'); await tick();
-  assert.deepEqual(h.picked, ['family mizel', 'obsidian-light']);
-  assert.match(h.html(), /data-skinpick="obsidian"/);
-  assert.doesNotMatch(h.html(), /data-skinpick="grove"/);
+  h.act('look', 'data-skinpick', 'obsidian-light'); await tick();
+  assert.deepEqual(h.picked, ['obsidian-light']);
+  assert.match(h.html(), /data-skinpick="obsidian-light" aria-pressed="true"/);
   h.view.destroy();
 });
 
@@ -112,15 +109,17 @@ function experienceStub(tweaks, extra = {}) {
 
 test('colors and tweaks are separate: onboarding offers every color; Look offers tweak sets apart from color', async () => {
   // Onboarding lists every colour: covered by tests/welcome-every-skin.test.mjs 'Pick a skin: one flat grid of every skin in WosSkin.list order, including a skin in no family'.
-  // A colour pick never swaps the tweak set: covered by tests/look-skin-colour-separation.test.mjs '${shell}: separate Skin/Color choices never replace the independent tweak mix (#801)'.
+  // A colour pick never swaps the tweak set: covered by tests/look-skin-colour-separation.test.mjs '${shell}: picking looks never changes the tweak mix (#801)'.
   const E = experienceStub([tweak('miguel/send-and-go'), tweak('wizard/failure-reason', { on: true }), tweak('miguel/reply-summary')]);
   const h = lookPage('phone', E); await tick(); h.view.focus('look');
+  assert.doesNotMatch(h.html(), /<section data-settings-feature="look">[\s\S]*data-tweak-toggle=[\s\S]*?<\/section>/, 'no tweak on Look: skins are a look only (wizard-ux#1190)');
+  h.view.focus('try-features');
   const html = h.html();
   assert.equal((html.match(/data-tweak-toggle="/g) || []).length, 3, 'a switch per tweak');
   assert.match(html, /data-tweak-toggle="wizard\/failure-reason" role="switch" aria-checked="true"/);
   assert.match(html, /data-tweak-toggle="miguel\/send-and-go" role="switch" aria-checked="false"/, 'everything else starts off');
   assert.doesNotMatch(html, /data-tweakauthor=|data-tweakpreset/, 'one flat list: no per-author quick button, no preset sets');
-  assert.ok(html.indexOf('data-tweak-toggle') > html.indexOf('<h4>Colors</h4>'), 'tweaks sit apart from colour');
+  assert.doesNotMatch(html, /data-skinpick=/, 'tweaks sit apart from colour, on their own page');
   // Each tweak set shows its author's display name (real experience.js reading the real profiles), not the id.
   const names = Object.fromEntries((await experienceRuntime().E.authors()).map(a => [a.id, a.name]));
   for (const who of ['wizard', 'miguel']) assert.ok(names[who] && names[who] !== who, `${who} set has a display name: ${names[who]}`);
@@ -133,10 +132,13 @@ test('features on for everyone are plain settings where they act, not tweaks', a
   // On a desktop with standard views, the view tweaks move to the Shell view picker; built-ins stay out either way.
   const desk = lookPage('desktop', experienceStub(tweaks, { desktopViews: [{ id: 'classic', name: 'Desks' }, { id: 'ai-apps', name: 'AI apps' }], desktopView: 'classic' }));
   const look = desk.html().match(/<section data-settings-feature="look">[\s\S]*?<\/section>/)[0];
-  assert.match(look, /data-tweak-toggle="miguel\/send-and-go"/, 'Tweaks lists only contributed ones');
-  assert.doesNotMatch(look, /data-tweak-toggle="(wizard\/unified-inbox|wizard\/machines-home|miguel\/ai-apps)"/);
   assert.match(look, /data-desktop-view="ai-apps"/, 'the view is a Shell view choice');
-  assert.doesNotMatch(look, /Built in/, 'no "built-in tweaks"');
+  assert.doesNotMatch(look, /data-tweak-toggle=/, 'no switch on Look');
+  desk.view.focus('try-features');
+  const tryNew = desk.html().match(/<section data-settings-feature="try-features">[\s\S]*?<\/section>/)[0];
+  assert.match(tryNew, /data-tweak-toggle="miguel\/send-and-go"/, 'Try new features lists only contributed ones');
+  assert.doesNotMatch(tryNew, /data-tweak-toggle="(wizard\/unified-inbox|wizard\/machines-home|miguel\/ai-apps)"/);
+  assert.doesNotMatch(tryNew, /Built in/, 'no "built-in tweaks"');
   desk.view.destroy();
   // The built-ins are ordinary switches on the pages where they act.
   const chats = lookPage('phone', experienceStub(tweaks)); chats.view.focus('chats');

@@ -392,10 +392,9 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   // The real experience.js loads one member of the group even when both are on.
   const both = await groupedDevice({ 'wizard/machines-home': true, 'miguel/machines-home': true });
   assert.deepEqual(both.active().filter(id => id.endsWith('/machines-home')), ['miguel/machines-home'], 'one Home map loads');
-  const src1 = 'return ' + exp.match(/const oneOf = (\(ids, own = recipe\(\)\) => .*);\n/)[1];
-  const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(group, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
-  const pick = make();  // the shipped function
-  assert.deepEqual(make([], ['miguel/machines-home'])(['wizard/machines-home', 'x/y']), ['x/y'], 'a My skin off for the owner package keeps the stock one off too');
+  const src1 = 'return ' + exp.match(/const oneOf = (ids => .*);\n/)[1];
+  const make = (offs = []) => new Function('catalog', 'offFor', 'owner', 'globalOff', src1)(group, () => offs, 'miguel', () => false);
+  const pick = make();  // the shipped function (a skin never decides: wizard-ux#1190)
   assert.deepEqual(make(['miguel/machines-home'])(['wizard/machines-home']), [], 'a saved off does too');
   assert.deepEqual(pick(['wizard/machines-home', 'miguel/machines-home', 'x/y']), ['miguel/machines-home', 'x/y']);
   assert.deepEqual(pick(['wizard/machines-home']), ['wizard/machines-home']);
@@ -675,20 +674,11 @@ test('sixteenth review: an unavailable group reaches its accounts; a saved or ag
   const err = machinesHome({ snapshot: { ...world(), aiError: 'timeout' } });
   assert.equal(words(err.page('ai').querySelector('.mh-ai-txt')), '70% left · last reading', 'a reading with an error is not live');
 });
-test('seventeenth review: a new My skin shows one switch per replacement group and never saves the hidden member off', async () => {
+test('seventeenth review: replacement groups are handed out as copies', async () => {
   const d = await groupedDevice();
   assert.deepEqual(plain(d.E.groups()), [['miguel/machines-home', 'wizard/machines-home']]);
   const g = d.E.groups(); g[0].push('x'); assert.equal(d.E.groups()[0].length, 2, 'a copy each time');
-  // The New skin draft (core/settings.js) keeps only the member that would load.
-  const src = withSettingsParts(read('web/core/settings.js'));
-  const loop = between(src, '      for (const g of window.WosExperience.groups?.() || []) {', '      // Feature switches');
-  for (const [map, want] of [[{ 'wizard/machines-home': true, 'miguel/machines-home': false, 'a/b': true }, 'wizard/machines-home'], [{ 'a/b': true }, 'miguel/machines-home']]) {
-    const ctx = { window: { WosExperience: { groups: () => [['miguel/machines-home', 'wizard/machines-home']] } },
-      items: [{ id: 'miguel/machines-home' }, { id: 'wizard/machines-home' }, { id: 'a/b' }], map };
-    vm.runInNewContext('var items = this.items, map = this.map;\n' + loop + '\nthis.out = { items: items.map(t => t.id), map };', ctx);
-    assert.deepEqual(plain(ctx.out.items), [want, 'a/b'], 'one switch per group');
-    assert.deepEqual(Object.keys(ctx.out.map).filter(k => k.endsWith('machines-home')), want in map ? [want] : [], 'the hidden member is never saved off');
-  }
+  // The New skin draft lists no switch at all (skins are a look only, wizard-ux#1190), so it cannot save a member off.
 });
 test('eighteenth review: machines from a saved or failed-read snapshot are last readings, not online', () => {
   const saved = machinesHome({ saved: { res: world() } });

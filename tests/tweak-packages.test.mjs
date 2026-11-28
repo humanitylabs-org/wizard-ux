@@ -214,9 +214,10 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/snooze-someday':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length + coreIds.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
-  assert.deepEqual(f.active(),['miguel/snooze-someday']);
+  assert.deepEqual(f.active(),['miguel/snooze-someday'], 'its old choice is carried into the shared switches once (wizard-ux#1190)');
   await f.E.toggle('wizard/failure-reason'); assert.ok(f.active().includes('wizard/failure-reason'));
-  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),[]);
+  assert.equal(skin.tweaks['wizard/failure-reason'], false, 'a flip never writes into the skin');
+  f.window.WosMySkin.active=null; await f.E.refresh(); assert.deepEqual(f.active(),['miguel/snooze-someday','wizard/failure-reason'], 'taking a skin off changes no feature: a skin is a look only');
 });
 
 test('installed list warms base profiles so picking Mizel does not wait for another network request', async () => {
@@ -470,7 +471,7 @@ function lookTweaks(tweaks, own = null) {
   const s = readRaw('web/core/settings.js');
   const ctx = runRecording(`${between(s, '  const tweakSwitches =', '\n')}\n${block(s, '  function tweakRows(')}\nthis.tweakRows = tweakRows;`, { window: { WosExperience: { state: { tweaks, channel: 'latest', shell: 'phone' }, authors: async () => [] }, WosMySkin: { active: own } },
     esc: v => String(v), shellTweaks: l => l, tweakOpts: new Map(), mounts: [], authorList: [{ id: 'miguel', name: 'Miguel' }, { id: 'wizard', name: 'Wizard' }] });
-  const doc = createDocument(); doc.body.innerHTML = ctx.tweakRows({}); return doc.body;
+  const doc = createDocument(); doc.body.innerHTML = ctx.tweakRows({}, 'try'); return doc.body;
 }
 test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)', () => {
   const tweaks = [{ id: 'wizard/zeta', name: 'Zeta', author: 'wizard', on: true }, { id: 'miguel/alpha', name: 'Alpha', author: 'miguel', on: false }, { id: 'miguel/mid', name: 'Mid', author: 'miguel', on: true }];
@@ -501,7 +502,7 @@ test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rend
   assert.equal(E.chooseAuthor, undefined);
 });
 
-const REMOVED = ['wizard/private-ai-nudge', 'wizard/phone-badge-look', 'wizard/boundary-agent-access', 'wizard/shorter-app-updates', 'wizard/attach-menu-icons', 'wizard/share-people-box', 'wizard/mac-app-updates', 'wizard/channel-model-emoji', 'wizard/channel-auto-emoji', 'wizard/chats-switcher', 'wizard/agent-approvals', 'wizard/phone-tester-builds', 'wizard/sent-rows', 'wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home', 'wizard/bar-scrub', 'wizard/chat-channels', 'wizard/thread-tracker', 'wizard/app-updates-list', 'wizard/pin-fast-open', 'wizard/draft-marks', 'wizard/pin-reach-answer', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/settings-search', 'wizard/standard-first-setup', 'wizard/background-continue', 'wizard/local-app-routes', 'wizard/app-wake', 'wizard/app-windows', 'wizard/assist-attach', 'wizard/install-in-sidebar', 'wizard/desktop-chats', 'wizard/capability-registry', 'wizard/capture-inbox', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/download-swipe', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/plain-alert-rows', 'wizard/private-mode', 'wizard/private-routing'];
+const REMOVED = ['wizard/skins-look-only', 'wizard/private-ai-nudge', 'wizard/phone-badge-look', 'wizard/boundary-agent-access', 'wizard/shorter-app-updates', 'wizard/attach-menu-icons', 'wizard/share-people-box', 'wizard/mac-app-updates', 'wizard/channel-model-emoji', 'wizard/channel-auto-emoji', 'wizard/chats-switcher', 'wizard/agent-approvals', 'wizard/phone-tester-builds', 'wizard/sent-rows', 'wizard/orb-radial', 'wizard/new-send-list', 'wizard/wizardos-name', 'wizard/two-orbs', 'wizard/app-borders', 'wizard/pin-buttons', 'miguel/no-desk-close', 'miguel/group-by-day', 'miguel/switch-row-actions', 'miguel/orb-shell', 'miguel/apps-home', 'wizard/bar-scrub', 'wizard/chat-channels', 'wizard/thread-tracker', 'wizard/app-updates-list', 'wizard/pin-fast-open', 'wizard/draft-marks', 'wizard/pin-reach-answer', 'wizard/agent-inbox', 'wizard/chats-inbox', 'wizard/settings-search', 'wizard/standard-first-setup', 'wizard/background-continue', 'wizard/local-app-routes', 'wizard/app-wake', 'wizard/app-windows', 'wizard/assist-attach', 'wizard/install-in-sidebar', 'wizard/desktop-chats', 'wizard/capability-registry', 'wizard/capture-inbox', 'wizard/needs-you-reason', 'wizard/follow-main', 'wizard/app-tap-home', 'wizard/plain-chat-titles', 'wizard/download-swipe', 'wizard/interface-manual', 'wizard/write-guard', 'wizard/sidebar-chats-view', 'wizard/action-cards', 'wizard/phone-sections', 'wizard/inbox-rows', 'wizard/chat-tags', 'wizard/chats-title-bar', 'wizard/phone-nav', 'wizard/catch-me-up', 'wizard/inbox-until-archived', 'wizard/sent-threads', 'wizard/plain-alert-rows', 'wizard/private-mode', 'wizard/private-routing'];
 test('retired Orb radial and the switches removed in wizard-ux issue 1239: saved mixes and recipes never request a removed package', async () => {
   const mixes = [
     new Map(),

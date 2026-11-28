@@ -12,75 +12,24 @@
  * non-CSS answer removes it; a bad rule only drops that rule (CSS error recovery). `?myskin=off` skips the
  * layer for one load, so a sheet that hides everything can always be fixed.
  *
- * Optional skin.js uses the package hook host, but only after a trusted Settings click approves its exact
- * SHA-256 on this device. Hash the response bytes and import those same bytes, never the URL again.
- * API: WosMySkin.state → { css, empty, info, off, script }, .refresh() → Promise, .reset() → Promise,
+ * Skins are look only (wizard-ux#1190): a skin.js in the folder never runs.
+ * API: WosMySkin.state → { css, empty, info, off }, .refresh() → Promise, .reset() → Promise,
  *      .on(fn) (state changed), .FILE (the path inside Files). */
 (function () {
   'use strict';
   const URL_CSS = '/wizard/v1/my-skin', CACHE = 'wos.myskin.v1', MAX = 64 * 1024;
-  const FILE = 'Skins/My skin/skin.css', OK = 'wos.myskin.js.ok';
+  const FILE = 'Skins/My skin/skin.css';
   const isDoc = typeof document !== 'undefined';
   let off = false;
   try { off = new URLSearchParams(location.search).get('myskin') === 'off'; } catch (_) {}
   const subs = new Set();
   const state = { css: '', empty: true, info: null, off, loaded: false };
-  state.script = { exists: false, sha256: null, bytes: 0, approved: false };
-  let verified = null, started = null, refreshSeq = 0;
-  const approval = () => { try { return localStorage.getItem(OK); } catch (_) { return null; } };
-  function stopScript() { window.WosSkinHost?.stopPersonal(); started = null; }
-  function turnOff() {
-    try { localStorage.removeItem(OK); } catch (_) {}
-    state.script.approved = false; stopScript(); emit();
-  }
-  async function startScript() {
-    const v = verified, host = window.WosSkinHost;
-    if (off || !own() || !v || approval() !== v.sha256 || !host?.personalState.ready || host.lookOnly || started === v.sha256) return;
-    started = v.sha256;
-    await host.loadPersonal(v.bytes, () => !off && !!own() && verified === v && approval() === v.sha256, scriptFile());
-    emit();
-  }
-  function turnOn(event) {
-    // No agent/API approval, synthetic clicks or stale buttons. The trusted event must hit this exact version.
-    const b = event?.target?.closest?.('button[data-myskin="on"]');
-    if (off || !own() || !verified || verified.sha256 !== state.script.sha256 || typeof MouseEvent === 'undefined' || !(event instanceof MouseEvent) || !event.isTrusted || event.type !== 'click' || !b?.isConnected || b.disabled || b.dataset.myskinHash !== state.script.sha256 || !state.script.sha256) return false;
-    try { localStorage.setItem(OK, state.script.sha256); } catch (_) { return false; }
-    state.script.approved = true; startScript(); emit(); return true;
-  }
-  // Where the owner (and their agent) find the script: the worn own skin's folder in Files.
-  const scriptFile = () => String(state.info?.path || FILE).replace(/skin\.css$/, 'skin.js');
-  // A script that failed to load or set up is switched off (approval revoked, so the next load starts off) and
-  // keeps its file and reason for Settings until different bytes arrive.
-  function failed(detail) {
-    if (!detail || !state.script.exists) return;
-    state.script.error = { file: detail.file || scriptFile(), message: String(detail.message || 'error').slice(0, 160), sha256: state.script.sha256 };
-    turnOff();
-  }
-  async function refreshScript(seq) {
-    const info = state.info?.script;
-    const lastError = state.script.error?.sha256 && state.script.error.sha256 === info?.sha256 ? state.script.error : null;
-    if (info?.exists) { migrate('skin.js'); apply(state.css); }
-    if (!info?.exists || verified?.sha256 !== info.sha256) { verified = null; stopScript(); }
-    state.script = { exists: !!info?.exists, sha256: info?.sha256 || null, bytes: info?.bytes || 0, approved: false, file: scriptFile(), error: lastError };
-    if (!info?.exists || approval() !== info.sha256) { turnOff(); }
-    if (!info?.exists || !/^[a-f0-9]{64}$/.test(info.sha256 || '') || info.bytes > MAX) { stopScript(); return; }
-    try {
-      const r = await fetch(`${URL_CSS}/script`, { cache: 'no-store', credentials: 'same-origin' });
-      if (!r.ok || !(r.headers.get('content-type') || '').startsWith('application/javascript')) throw new Error('not a script');
-      const bytes = await r.arrayBuffer();
-      if (bytes.byteLength > MAX) throw new Error('too large');
-      const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(n => n.toString(16).padStart(2, '0')).join('');
-      if (seq !== refreshSeq) return;
-      if (hash !== info.sha256 || hash !== r.headers.get('X-Wizard-Sha256')) throw new Error('script changed while reading');
-      const problem = window.WosSkinHost?.scriptProblem(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-      if (problem) { state.script.error = { file: scriptFile(), message: typeof problem === 'string' ? problem : 'use the skin hook API', sha256: hash }; throw new Error('use the skin hook API'); }
-      verified = verified?.sha256 === hash ? verified : { bytes, sha256: hash };
-      state.script.valid = true;
-      state.script.approved = approval() === hash;
-      if (!state.script.approved) stopScript();
-      else await startScript();
-    } catch (_) { if (seq === refreshSeq) { verified = null; turnOff(); } }
-  }
+  /* Skins are look only (wizard-ux#1190): an own skin is its stylesheet and colour. A skin.js in its folder never
+   * runs, so the old per-device script approval is cleared. */
+  let refreshSeq = 0;
+  try { localStorage.removeItem('wos.myskin.js.ok'); } catch (_) {}
+  // A folder with only a script still counts as an own skin (its colour), as before.
+  function noteScript() { if (state.info?.script?.exists) { migrate('skin.js'); apply(state.css); } }
   // The box owns recipes. Device previews stay recoverable without background box writes.
   const RECIPES = 'wos.own-skins.v1', BOX_CACHE = 'wos.own-skins.cache.v1', URL_SKINS = '/wizard/v1/skins';
   let serverMode = null, loadingRecipes = null, writing = Promise.resolve(), selecting = false;
@@ -124,7 +73,6 @@
   }
   function recipeChanged() {
     apply(state.css);
-    if (!own()) stopScript(); else void startScript();
     emit();
     if (typeof Event !== 'undefined') window.dispatchEvent?.(new Event('wos:own-skin'));
   }
@@ -181,7 +129,7 @@
     const changed = JSON.stringify(recipes) !== JSON.stringify(next); recipes = next;
     // A storage quota failure must not turn a successful box write into a false failure.
     try { localStorage.setItem(BOX_CACHE, JSON.stringify(recipes)); } catch (_) {}
-    if (oldActive !== recipes.active) { verified = null; stopScript(); apply(''); cache(''); }
+    if (oldActive !== recipes.active) { apply(''); cache(''); }
     selecting = true;
     try { if (own() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
     finally { selecting = false; }
@@ -291,8 +239,8 @@
       const j = await fetch(`${URL_CSS}?format=json`, { cache: 'no-store', credentials: 'same-origin' });
       const info = j.ok ? await j.json() : null;
       if (seq !== refreshSeq) return state;
-      state.info = info; await refreshScript(seq);
-    } catch (_) { verified = null; stopScript(); }
+      state.info = info; noteScript();
+    } catch (_) {}
     emit(); return state;
   }
   async function reset() {
@@ -316,7 +264,7 @@
     // The owner overlay stays above the skin and the tweaks it brings; changing skin never clears it.
     // Per-skin tweak offs live in experience.js until Agent Service offers an owner profile route.
     get experience() { return window.WosExperience || null; },
-    refresh, reset, turnOn, turnOff, startScript,
+    refresh, reset,
     on(fn) { if (typeof fn === 'function') subs.add(fn); return () => subs.delete(fn); },
     _test: { apply, emptyCss },
   };
@@ -325,10 +273,6 @@
     if (own() && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base);
     window.addEventListener?.('wos:skin', () => { if (!selecting && own() && own().base !== window.WosSkin.current) { const pending = api.leave(); pending?.catch?.(() => {}); } });
     if (isDoc && !off) {
-      window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
-      window.addEventListener?.('wos:personal-error', e => failed(e.detail));
-      // Skins are look only (wizard-ux#1190) turned on or off: the host has stopped the script; start it again if allowed.
-      window.addEventListener?.('wos:look-only', () => { stopScript(); void startScript(); emit(); });
       refresh();
       // Stylesheets added to <head> later (skin packages) must not land above My skin.
       document.addEventListener('DOMContentLoaded', () => { if (!state.empty && el) styleEl(); });

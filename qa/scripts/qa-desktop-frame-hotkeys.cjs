@@ -183,10 +183,10 @@ async function picker(p, chord, i = 0) {
       assert.deepEqual(await page.evaluate(() => ({ ws: __wux.ws, cur: __wux.cur })), before);
       await field(page, before.cur).waitFor(); await picker(page, 'Alt+o', before.cur);
     });
-    for (const skin of ['nebula', 'landscapes']) await check('in-shell skin proof and opaque picker: ' + skin, async () => {
+    // Skins (wizard-ux#1190): every colour is one tap on Settings › Appearance; there are no skin family tiles.
+    for (const skin of ['nebula', 'obsidian']) await check('in-shell skin proof and opaque picker: ' + skin, async () => {
       const i = await cur(page); await field(page, i).fill('skin change keeps this unsent text');
       await page.locator('#settingsBtn').click(); await page.locator('#dsettings [data-st-page="appearance"]').click();
-      await page.locator(`#dsettings [data-skinfamily="${skin === 'nebula' ? 'wizard' : 'mizel'}"]`).click();
       await page.locator(`#dsettings [data-skinpick="${skin}"]`).click();
       await page.waitForFunction(skin => WosSkin.current === skin && !document.querySelector('#dsettings [aria-busy="true"]') && !window.WosExperience?.state?.busy, skin);
       await page.locator('.mz-intro').waitFor({ state: 'detached' }); await stable(page);

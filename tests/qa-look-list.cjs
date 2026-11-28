@@ -1,26 +1,24 @@
 'use strict';
-// Settings › Look: one list of looks (wizard-ux issue 1816, switch wizard/skins-look-only). Real phone (412 px) and
+// Settings › Look: one list of skins (wizard-ux issues 1816 and 1190; no switch since 1190). Real phone (412 px) and
 // desktop shells on a synthetic origin. A fake box keeps two own skins (/wizard/v1/skins: GET, PUT /active, POST);
-// every other write is refused. With the switch on, Look shows ONE "Looks" list: every colour (the Landscapes colours
+// every other write is refused. Look shows ONE "Skins" list: every colour (the Landscapes colours
 // stay a Background), the own skins and + New skin; no Skin row and no separate Colors row. Mode and Background follow
 // the worn colour and step aside while an own skin is worn. New skin and Import skin JSON stay.
-// QA_SWITCH=off checks the old Look (Skin + Colors); with QA_OUT=<dir> it also writes look-<shell>.html, so a run with
-// QA_WEB=<main checkout>/web gives byte-identical files for "switch off changes nothing". QA_OUT also saves shots.
+// QA_OUT=<dir> saves shots.
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(process.env.QA_WEB||path.join(__dirname,'../web')),origin='https://look-list.test',prefix='/wizard-os-home/';
 const out=process.env.QA_OUT||'';if(out)fs.mkdirSync(out,{recursive:true});
-const ON=process.env.QA_SWITCH!=='off',ID='wizard/skins-look-only';
 const only=(process.env.QA_CASES||'phone,desktop').split(',');
 const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':f.endsWith('.json')?'application/json':f.endsWith('.png')?'image/png':f.endsWith('.jpg')?'image/jpeg':f.endsWith('.webp')?'image/webp':f.endsWith('.svg')?'image/svg+xml':'application/octet-stream';
 (async()=>{
  const browser=await chromium.launch({headless:true});const report=[];
  try{
   for(const v of [{shell:'phone',w:412,h:892},{shell:'desktop',w:1366,h:860}].filter(v=>only.includes(v.shell))){
-   const phone=v.shell==='phone',label=`${v.shell}${ON?'':' (switch off)'}`;
+   const phone=v.shell==='phone',label=v.shell;
    const ctx=await browser.newContext({viewport:{width:v.w,height:v.h},isMobile:phone,hasTouch:phone,deviceScaleFactor:phone?2:1,serviceWorkers:'block'});
    await ctx.routeWebSocket('**/*',ws=>ws.close());
-   const mix=ON?{[ID]:true}:{};
+   const mix={};
    await ctx.addInitScript(({shell,mix})=>{if(window!==window.top)return;if(sessionStorage.getItem('qa.boot'))return;sessionStorage.setItem('qa.boot','1');for(const[k,val]of Object.entries({'wos.shell':shell,'wos.channel.v1':'latest','wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.desktop-view.v1':'classic','wos.skin':'nebula','wos.skin-tweaks.v1':JSON.stringify({version:1,preset:'none',off:{},mix})}))localStorage.setItem(k,val);},{shell:v.shell,mix});
    // The fake box's own skins (the Agent Service /wizard/v1/skins shape).
    const box={skins:[{id:'work',name:'Work look',base:'grove',tweaks:{}},{id:'night',name:'Night look',base:'obsidian',tweaks:{}}],active:null};
@@ -50,7 +48,6 @@ const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith
    await pg.waitForFunction(()=>window.WosSettings&&(window.__wos||window.__wux)&&window.WosMySkin);
    await pg.addStyleTag({content:'#wosWelcome{display:none!important}'});
    await pg.evaluate(()=>{if(window.WosWelcome?.active)window.WosWelcome.close?.();});
-   await pg.waitForFunction(([id,on])=>(document.documentElement.dataset.tweaks||'').split(' ').includes(id)===on,[ID,ON],{timeout:15000});
    await pg.waitForFunction(()=>(window.WosMySkin.recipes||[]).length===2,null,{timeout:15000});
    await pg.waitForFunction(()=>{const o=window.__wos?.openSettings||window.__wux?.openSettings;o();return !!document.querySelector('.st-inner .st-index nav');},null,{timeout:15000});
    const look=async()=>{
@@ -63,27 +60,21 @@ const type=f=>f.endsWith('.js')||f.endsWith('.mjs')?'text/javascript':f.endsWith
     const g=[...document.querySelectorAll('[data-stgroup="look"]')].find(e=>e.getClientRects().length);
     const page=g.closest('.st-page')||g.parentElement;
     const heads=[...g.querySelectorAll('h4')].map(h=>h.textContent.trim());
-    const list=g.querySelector('[role="group"][aria-label="Looks"]');
+    const list=g.querySelector('[role="group"][aria-label="Skins"]');
     const cards=list?[...list.querySelectorAll('.skp-card')].map(b=>({name:b.querySelector('.skp-nm')?.textContent.trim(),pick:b.dataset.skinpick||null,own:b.dataset.ownskin||null,newskin:b.hasAttribute('data-newskin'),pressed:b.getAttribute('aria-pressed')})):[];
-    return {heads,cards,families:g.querySelectorAll('[data-skinfamily]').length,skinsGroup:!!g.querySelector('[aria-label="Skins"]'),mode:!!g.querySelector('[data-skinmode]'),background:!!g.querySelector('[role="radiogroup"][aria-label="Background"]'),ownPanel:!!g.querySelector('[data-ownskin-panel]'),import:!!page.querySelector('[data-skinimport]'),switches:g.querySelectorAll('[data-try-features]').length,html:g.outerHTML,cur:window.WosSkin.current,active:window.WosMySkin.active?.id||null};
+    return {heads,cards,families:g.querySelectorAll('[data-skinfamily]').length,looks:/Looks/.test(g.textContent),mode:!!g.querySelector('[data-skinmode]'),background:!!g.querySelector('[role="radiogroup"][aria-label="Background"]'),ownPanel:!!g.querySelector('[data-ownskin-panel]'),import:!!page.querySelector('[data-skinimport]'),switches:g.querySelectorAll('[data-try-features]').length,html:g.outerHTML,cur:window.WosSkin.current,active:window.WosMySkin.active?.id||null};
    });
    const shot=async name=>{if(!out)return;const g=pg.locator('[data-stgroup="look"]:visible').first();await g.scrollIntoViewIfNeeded();await pg.screenshot({path:path.join(out,`look-${v.shell}-${name}.png`)});};
    const tap=async sel=>{const el=pg.locator(sel+':visible').first();await el.scrollIntoViewIfNeeded();if(phone)await el.tap();else await el.click();await pg.waitForTimeout(700);};
    const r={case:label};
    let s=await read();
-   if(out&&!ON)fs.writeFileSync(path.join(out,`look-${v.shell}.html`),s.html.replace(/ data-morph-key="[^"]*"/g,''));
-   if(!ON){
-    assert.ok(s.skinsGroup&&s.families>0,`${label}: Skin row stays ${JSON.stringify(s.heads)}`);
-    assert.ok(s.heads.includes('Colors'),`${label}: Colors row stays`);
-    assert.equal(s.cards.length,0,`${label}: no Looks list`);
-    r.heads=s.heads;await shot('off');report.push(r);await ctx.close();continue;
-   }
    r.heads=s.heads;r.cards=s.cards.map(c=>c.name);
    await shot('on');
-   // 1. One list of looks: every colour, the own skins, + New skin; no Skin row and no separate Colors row.
-   assert.ok(!s.skinsGroup&&s.families===0,`${label}: no Skin row`);
+   // 1. One list of skins: every colour, the own skins, + New skin; no Skin row and no separate Colors row.
+   assert.ok(s.families===0,`${label}: no skin family row`);
+   assert.ok(!s.looks,`${label}: called skins, not looks (James, 27 Nov)`);
    assert.ok(!s.heads.includes('Colors')&&!s.heads.includes('Skin'),`${label}: no Colors or Skin heading ${JSON.stringify(s.heads)}`);
-   assert.ok(s.heads.includes('Looks'),`${label}: one Looks list ${JSON.stringify(s.heads)}`);
+   assert.ok(s.heads.includes('Skins'),`${label}: one Skins list ${JSON.stringify(s.heads)}`);
    const picks=s.cards.filter(c=>c.pick).map(c=>c.pick);
    for(const id of ['nebula','grove','tide','ember','signal','obsidian'])assert.ok(picks.includes(id),`${label}: ${id} is a look ${JSON.stringify(picks)}`);
    assert.ok(!picks.some(id=>/^landscapes/.test(id)),`${label}: Landscapes colours stay a Background`);

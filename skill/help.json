@@ -17,7 +17,7 @@
     "Search settings: the box at the top of the Settings list. Typing keeps only the pages that mention the words and marks them on the open page, scrolled to the first; Esc clears it, Enter opens the first page."
   ],
   "switchesIntro": [
-    "Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device."
+    "Settings › Try new features lists unfinished features anyone can switch on to try, A to Z, each 'by <author>'. The group only shows when this Wizard is on the For testers channel (Settings › About & updates › Channel › For testers); on For everyone it is hidden and these switches stay off. The same switches are also in the WizardOS Tracker app (Try it). A choice follows the owner on every device."
   ],
   "pages": {
     "overview": {
@@ -72,6 +72,10 @@
     },
     "about": {
       "help": "About & updates: update WizardOS (Automatic or Ask me), the release channel (For everyone or For testers), versions, connection status, and Gestures & help."
+    },
+    "try-features": {
+      "help": "Try new features: the feature switches, its own page in Settings (For testers channel only). See Feature switches below.",
+      "when": "only on the For testers channel, when there are switches"
     }
   },
   "sections": {
@@ -83,14 +87,12 @@
       }
     },
     "look": {
-      "help": "Skin: pick a skin (a whole look) and one of its colors; + New skin makes your own skin (name, base skin, color, tweaks), which the agent can change ('change my <name> skin so…'). Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).",
+      "help": "Skins: one list of skins, every color plus your own skins; + New skin makes your own skin (a name, a base skin and a color), which you can then ask the agent to change ('change my <name> skin so…'). A skin is a look only: it never turns features on or off. Your own skins show here with Edit with your Wizard and Remove skin. Some skins also offer Mode (Dark or Light) and Background (plain, pictures, or your own image).",
       "controls": {
-        "Skin": null,
-        "Colors": "the colors of the chosen skin",
+        "Skins": "every color and your own skins in one row; + New skin adds one",
         "Shell view": "desktop only: how this desktop is laid out, chosen per device",
         "Desks": "the classic desktop: a top bar, desks of windows",
         "AI apps": "chats in a sidebar on the left, the chat in the middle, apps on the right (like the ChatGPT and Claude apps); the standard desktop view",
-        "Try new features": "the feature switches (For testers channel only), see Feature switches below",
         "Mode": "Dark or Light, for skins that have both",
         "Background": "Plain, pictures, or (some skins) your own image with Choose image",
         "Dark": null,
@@ -318,44 +320,43 @@
       "when": "Android app"
     },
     "try-features": {
-      "help": "Try new features as its own Settings page (with Skins look only on): the same feature switches, listed A to Z."
+      "help": "Try new features: unfinished features you can switch on to try, A to Z, each labelled with who made it.",
+      "controls": {
+        "Try new features": "the feature switches, see Feature switches below"
+      }
     }
   },
   "switches": {
     "miguel/send-and-go": {
-      "where": "Settings › Appearance › Try new features › Send and go"
+      "where": "Settings › Try new features › Send and go"
     },
     "miguel/snooze-someday": {
-      "where": "Settings › Appearance › Try new features › One-tap Snooze · bottom of Ready"
+      "where": "Settings › Try new features › One-tap Snooze · bottom of Ready"
     },
     "miguel/machines-home": {
-      "where": "Settings › Appearance › Try new features › Machines on Home"
+      "where": "Settings › Try new features › Machines on Home"
     },
     "miguel/archive-top": {
-      "where": "Settings › Appearance › Try new features › Archive on top"
+      "where": "Settings › Try new features › Archive on top"
     },
     "miguel/reply-summary": {
-      "where": "Settings › Appearance › Try new features › Short answer first; its options show under it when on"
+      "where": "Settings › Try new features › Short answer first; its options show under it when on"
     },
     "miguel/now-playing": {
-      "where": "Settings › Appearance › Try new features › Now playing"
+      "where": "Settings › Try new features › Now playing"
     },
     "miguel/calm-offline": {
-      "where": "Settings › Appearance › Try new features › Calm offline card"
+      "where": "Settings › Try new features › Calm offline card"
     },
     "wizard/failure-reason": {
-      "where": "Settings › Appearance › Try new features › Why a reply failed"
-    },
-    "wizard/skins-look-only": {
-      "help": "Skins change only the look; feature switches decide what runs. Off again brings your skin's choices back.",
-      "where": "Settings › Appearance › Try new features › Skins are look only"
+      "where": "Settings › Try new features › Why a reply failed"
     },
     "wizard/update-bug-reports": {
-      "where": "Settings › Appearance › Try new features › Tell the team about failed updates"
+      "where": "Settings › Try new features › Tell the team about failed updates"
     },
     "wizard/link-token-repair": {
       "help": "If the agent's app tools fail (unauthorized), `wizard link` restores the box's token; `wizard doctor` checks it.",
-      "where": "Settings › Appearance › Try new features › Repair the agent's Wizard connection"
+      "where": "Settings › Try new features › Repair the agent's Wizard connection"
     },
     "wizard/unified-inbox": {
       "where": "Settings › Chats & app screens › Notifications › Notifications in Chats (on for everyone)"
@@ -367,104 +368,100 @@
     },
     "wizard/assist-agent-note": {
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
-      "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
+      "where": "Settings › Try new features › Side button opens the Agent chat"
     },
     "wizard/get-set-up": {
       "help": "Setup lists optional accounts to connect.",
-      "where": "Settings › Appearance › Try new features › Get set up list in Setup"
+      "where": "Settings › Try new features › Get set up list in Setup"
     },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
-      "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
+      "where": "Settings › Try new features › Catch me up clears Sent"
     },
     "wizard/result-reader": {
       "help": "A private model files each finished background task.",
-      "where": "Settings › Appearance › Try new features › Result reader"
+      "where": "Settings › Try new features › Result reader"
     },
     "wizard/new-chat-chips": {
       "help": "A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.",
-      "where": "Settings › Appearance › Try new features › New chat quick links"
+      "where": "Settings › Try new features › New chat quick links"
     },
     "wizard/auto-tags": {
       "help": "Chats are tagged from what they are about; a channel's What goes here… edits its list.",
-      "where": "Settings › Appearance › Try new features › Automatic chat tags"
+      "where": "Settings › Try new features › Automatic chat tags"
     },
     "wizard/first-chat-goals": {
       "help": "Five picks, then a first win.",
-      "where": "Settings › Appearance › Try new features › Five-choice first chat"
+      "where": "Settings › Try new features › Five-choice first chat"
     },
     "wizard/private-first-setup": {
       "help": "New installs start private: Welcome leads with Tinfoil; Claude and ChatGPT are optional extras.",
-      "where": "Settings › Appearance › Try new features › Private first setup"
+      "where": "Settings › Try new features › Private first setup"
     },
     "wizard/reply-buttons": {
       "help": "Tap-to-answer buttons in agent replies.",
-      "where": "Settings › Appearance › Try new features › Tap to answer in replies"
+      "where": "Settings › Try new features › Tap to answer in replies"
     },
     "wizard/reply-actions": {
       "help": "Reply buttons that tick something off in an app (a checklist step) with no agent reply; a failure shows Retry.",
-      "where": "Settings › Appearance › Try new features › Buttons that tick things off in apps"
+      "where": "Settings › Try new features › Buttons that tick things off in apps"
     },
     "wizard/pin-instant-open": {
       "help": "Android: pinned app icons open at once on their last screen.",
-      "where": "Settings › Appearance › Try new features › Instant home-screen apps"
+      "where": "Settings › Try new features › Instant home-screen apps"
     },
     "wizard/phone-recovery-mode": {
       "help": "Android: a frozen start reopens in recovery mode.",
-      "where": "Settings › Appearance › Try new features › Phone recovery mode"
+      "where": "Settings › Try new features › Phone recovery mode"
     },
     "wizard/phone-push": {
       "help": "Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).",
-      "where": "Settings › Appearance › Try new features › Instant phone notifications"
+      "where": "Settings › Try new features › Instant phone notifications"
     },
     "wizard/phone-chat-replies": {
       "help": "Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.",
-      "where": "Settings › Appearance › Try new features › Chat replies as Chats notifications"
+      "where": "Settings › Try new features › Chat replies as Chats notifications"
     },
     "wizard/lock-screen-player": {
       "help": "Android and iPhone: Music and Podcasts play through the phone's media player (lock screen, Control Center, headset buttons), and keep playing locked.",
-      "where": "Settings › Appearance › Try new features › Phone media player for Music and Podcasts"
-    },
-    "wizard/skins-look-only": {
-      "help": "Skins become a look only: only feature switches decide what runs. Your skin's own choices come back when you switch this off.",
-      "where": "Settings › Appearance › Try new features › Skins are look only"
+      "where": "Settings › Try new features › Phone media player for Music and Podcasts"
     },
     "wizard/inbox-pin-top": {
       "help": "Pin threads on top.",
-      "where": "Settings › Appearance › Try new features › Inbox: pin threads to the top"
+      "where": "Settings › Try new features › Inbox: pin threads to the top"
     },
     "wizard/smart-inbox": {
       "help": "Inbox: only what blocks you.",
-      "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
+      "where": "Settings › Try new features › Smart inbox: only what needs you"
     },
     "wizard/apps-panel": {
       "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
-      "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
+      "where": "Settings › Try new features › Phone Apps tile: Favorites panel and quick switcher",
       "when": "phone only"
     },
     "wizard/app-picker-store-search": {
       "help": "Add an app's search also finds App Store apps.",
-      "where": "Settings › Appearance › Try new features › Add an app: search the App Store too"
+      "where": "Settings › Try new features › Add an app: search the App Store too"
     },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",
-      "where": "Settings › Appearance › Try new features › Bottom app bar on desktop"
+      "where": "Settings › Try new features › Bottom app bar on desktop"
     },
     "wizard/try-feature-counts": {
       "help": "Sends features you tried and your thumbs, plus a random box id.",
-      "where": "Settings › Appearance › Try new features › Share feature counts"
+      "where": "Settings › Try new features › Share feature counts"
     },
     "wizard/feature-counts-ask": {
       "help": "Shared only after you say Share.",
-      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
+      "where": "Settings › Try new features › Ask before sharing feature counts"
     },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
-      "where": "Settings › Appearance › Try new features › Install apps your agent builds"
+      "where": "Settings › Try new features › Install apps your agent builds"
     },
     "wizard/backup-health": {
       "help": "Resources shows your backup's health.",
-      "where": "Settings › Appearance › Try new features › Backup health in Resources"
+      "where": "Settings › Try new features › Backup health in Resources"
     }
   },
   "screenOrder": [
@@ -639,7 +636,7 @@
     }
   ],
   "howTo": {
-    "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Appearance › Try new features › the feature's switch.",
+    "Turn on a new feature (or get them first)?": "Settings › About & updates › Channel › For testers (if not already), then Settings › Try new features › the feature's switch.",
     "Turn on Channels?": "Nothing to turn on any more: open Chats and tap Tags in the tabs at the bottom (Inbox · Tags · Sent); your channels and General are listed there. (A box whose Agent Service has no Sent log shows Channels / Activity tabs at the top instead.)",
     "Make Wizard update automatically?": "Settings › About & updates › Updates › Automatic (installs overnight, never during a chat). For apps: Settings › About & updates › Apps › Automatic (checks and updates apps every hour).",
     "Is my Mac app (Wizard for Mac) up to date?": "Inside Wizard for Mac: Settings › About & updates › Wizard for Mac shows its version and Up to date, or the new version downloading; Check for updates looks now, Update and restart installs a ready one, Download gets a release that needs a new download. Not shown in a browser or on the phone.",
