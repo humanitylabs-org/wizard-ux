@@ -36,11 +36,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.junit.Assert.*;
 
 /**
- * Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open) in the real app on an emulator,
+ * Instant home-screen apps (wizard-ux issue 1830, on for everyone) in the real app on an emulator,
  * against a disposable localhost Wizard (files/qa_home.txt) whose pinned page and app are stand-ins that never heard
  * of the feature (the pinned page only makes the two calls core/single-app-session.js makes). Each open is a cold one:
  * the pinned window's task is removed first, as when Android has dropped it.
- *  1. Switch on, first open (no picture yet, the pinned page held back 4 s): Android's placeholder (the app's name on
+ *  1. First open (no picture yet, the pinned page held back 4 s): Android's placeholder (the app's name on
  *     the skin's background) is on the window's first frame, never an empty window and no Connecting; then the app
  *     loads from the box, and a picture of it is kept while it is still on screen (field report 2, 26 Nov).
  *  1b. The pinned page held back 13 s, past the 10 s Can't-reach mark, while the box's /shell-health answers: no
@@ -52,7 +52,6 @@ import static org.junit.Assert.*;
  *  3b. (wizard-ux issue 1959) The app's address is a redirect and its frame never finishes loading (a picture the box
  *     holds 15 s), so the pinned page never says the app has loaded: the cover still leaves within 2 s of the pinned
  *     page painting, the app is on screen, and on the next open the phone no longer reads the redirect itself.
- *  4. Switch off: the same held-back open shows today's Connecting, no saved picture, and every file is asked for.
  * Run by {@link DeviceBridgeE2eTest}. Numbers and screenshots go to logcat (tags WizardPinQa, PinShot).
  */
 final class PinInstantScenario {
@@ -68,8 +67,7 @@ final class PinInstantScenario {
         try (Box box = new Box()) {
             Files.write(home.toPath(), box.origin().getBytes(StandardCharsets.UTF_8));
             waitForNetwork(c);
-            PinInstant.setOn(c, false);
-            PinInstant.setOn(c, true);
+            forget(c);
 
             // The main app answered a moment ago on this network (as when it is open).
             PinInstant.reached(c);
@@ -163,7 +161,7 @@ final class PinInstantScenario {
                 SystemClock.sleep(1200);
             }
             List<Long> sorted = new ArrayList<>(toShot); Collections.sort(sorted);
-            Log.i(TAG, "switch on: last screen on screen after " + toShot + " ms, median " + sorted.get(2) + " ms (5 cold opens, page held back 4 s)");
+            Log.i(TAG, "last screen on screen after " + toShot + " ms, median " + sorted.get(2) + " ms (5 cold opens, page held back 4 s)");
 
             // 3. the app is updated on the box: the next open shows it
             box.version = 2;
@@ -208,37 +206,23 @@ final class PinInstantScenario {
             }
             box.redirectStart = false; box.holdPictureMs = 0;
 
-            // 4. switch off: today's behaviour
-            PinInstant.setOn(c, false);
-            SystemClock.sleep(500);
-            assertFalse("switch off removes the kept pictures", shot.exists());
-            close(c);
-            box.clear(); box.pageDelayMs = 5000;
-            long t0 = open(c);
-            Activity a = waitResumed(10000);
-            assertTrue("switch off: no saved picture", waitShotDrawn(a, t0, 600) < 0);
-            long[] firstFrame = {0};
-            InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> firstFrame[0] = ((MainActivity) a).pinFirstDrawAt());
-            assertNotNull("switch off: Connecting as today", find(device, By.text("Connecting to your Wizard…"), 4000));
-            long connecting = SystemClock.uptimeMillis() - t0;
-            SystemClock.sleep(Math.max(0, 2500 - connecting));
-            shot(device, c, "off-held-back");
-            assertNotNull("switch off: the live app", find(device, By.textStartsWith("Pinned app v2"), 20000));
-            Log.i(TAG, "switch off: first frame (empty) after " + (firstFrame[0] > 0 ? firstFrame[0] - t0 : -1) + " ms, Connecting seen by " + connecting
-                    + " ms, the app by " + (SystemClock.uptimeMillis() - t0) + " ms (page held back 5 s)");
-            SystemClock.sleep(800);
-            Log.i(TAG, "switch off: box saw " + box.files());
-            assertTrue("switch off: the app's files are asked for as before", box.saw("GET /qa-pin/app.js"));
             Log.i(TAG, "pin instant open scenario passed");
         } finally {
             pinIcon(c, false);
             //noinspection ResultOfMethodCallIgnored
             home.delete();
-            PinInstant.setOn(c, false);
+            forget(c);
             close(c);
             shell("svc wifi disable");
             device.pressHome();
         }
+    }
+
+    /** Nothing kept from an earlier run: no reached mark, no kept files, no saved pictures. */
+    private static void forget(Context c) {
+        c.getApplicationContext().getSharedPreferences("pin-instant-open", Context.MODE_PRIVATE).edit().clear().commit();
+        PinCache.clear(PinInstant.cacheDir(c));
+        PinCache.clear(PinInstant.shotDir(c));
     }
 
     /** Stores (or removes) a pinned icon for the stand-in app the way HomeScreenShortcuts does: name and PNG picture. */

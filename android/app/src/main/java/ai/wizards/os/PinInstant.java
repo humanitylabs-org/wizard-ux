@@ -16,14 +16,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default): the Android half.
- * The switch lives in the shell; the main page copies it here (WizardOSNative.pinInstantSwitch), because a home-screen
- * app window's page never sees the shell's switches. Rules are in PinInstantPolicy, the file cache in PinCache.
+ * Instant home-screen apps (wizard-ux issue 1830, on for everyone): the Android half. Rules are in PinInstantPolicy,
+ * the file cache in PinCache.
  *
  *  - {@link #reached}: any Wizard window got an answer from this box (when, and over which network).
  *  - {@link #skipConnecting}: a pinned open may leave out the Connecting screen.
- *  - The last screen of each pinned app, saved when its window leaves the screen and shown at the next cold open
- *    until the app's page has loaded (MainActivity pinShot*). App-private cache; switch off deletes them.
+ *  - The last screen of each pinned app, saved when its window leaves the screen (and once it has shown) and shown at
+ *    the next cold open until the app's page has loaded (MainActivity pinShot*). App-private cache.
  *  - {@link #cache}: the pinned window's phone-side file cache.
  */
 final class PinInstant {
@@ -35,16 +34,11 @@ final class PinInstant {
         return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    static boolean on(Context c) { return prefs(c).getBoolean("on", false); }
-
-    static void setOn(Context c, boolean on) {
-        if (on(c) == on) return;
-        prefs(c).edit().putBoolean("on", on).remove("reachedAt").remove("reachedNet").remove("reachedOrigin").apply();
-        android.util.Log.i("WizardOSPinInstant", "pin-instant-open switch " + (on ? "on" : "off"));
-        if (!on) {
-            final Context app = c.getApplicationContext();
-            new Thread(() -> { PinCache.clear(cacheDir(app)); PinCache.clear(shotDir(app)); }, "pin-instant-clear").start();
-        }
+    /** Phone 0.10.72 to 0.10.83 kept a copy of the old shell switch wizard/pin-instant-open here; it is no longer
+     *  read, and the main page's call (WizardOSNative.pinInstantSwitch) removes it once. */
+    static void forgetSwitch(Context c) {
+        SharedPreferences p = prefs(c);
+        if (p.contains("on")) p.edit().remove("on").apply();
     }
 
     /** The network an answer came over right now ("" with no network). */
@@ -58,10 +52,9 @@ final class PinInstant {
         } catch (RuntimeException e) { return ""; }
     }
 
-    /** A Wizard window got an answer from this box (a page committed or painted). Only while the switch is on; the
-     *  same answer again within a second or two (a commit and its paint) is written once. */
+    /** A Wizard window got an answer from this box (a page committed or painted). The same answer again within a
+     *  second or two (a commit and its paint) is written once. */
     static void reached(Context c) {
-        if (!on(c)) return;
         long now = System.currentTimeMillis();
         SharedPreferences p = prefs(c);
         String net = network(c), origin = ai.wizards.os.device.AppState.origin(c);
@@ -73,7 +66,7 @@ final class PinInstant {
     static boolean skipConnecting(Context c) {
         SharedPreferences p = prefs(c);
         boolean sameBox = ai.wizards.os.device.AppState.origin(c).equals(p.getString("reachedOrigin", ""));
-        return sameBox && PinInstantPolicy.skipConnecting(p.getBoolean("on", false), System.currentTimeMillis(),
+        return sameBox && PinInstantPolicy.skipConnecting(System.currentTimeMillis(),
                 p.getLong("reachedAt", 0), p.getString("reachedNet", ""), network(c));
     }
 
@@ -86,7 +79,7 @@ final class PinInstant {
     }
 
     static Bitmap shot(Context c, String origin, String app) {
-        if (app == null || !on(c)) return null;
+        if (app == null) return null;
         File f = shotFile(c, origin, app);
         if (!f.isFile() || !PinInstantPolicy.shotFresh(System.currentTimeMillis(), f.lastModified())) return null;
         // RGB_565: half the memory of the default, so it decodes and reaches the screen sooner (a JPEG has no alpha).
@@ -103,7 +96,7 @@ final class PinInstant {
                 if (!dir.isDirectory() && !dir.mkdirs()) return;
                 File f = shotFile(ctx, origin, app), tmp = new File(dir, f.getName() + ".tmp");
                 try (FileOutputStream out = new FileOutputStream(tmp)) { b.compress(Bitmap.CompressFormat.JPEG, 82, out); }
-                if (!on(ctx) || !tmp.renameTo(f)) tmp.delete();
+                if (!tmp.renameTo(f)) tmp.delete();
             } catch (IOException | RuntimeException e) { /* no picture this time */ }
             finally { b.recycle(); }
         }, "pin-shot-save").start();

@@ -1,6 +1,6 @@
-// Instant home-screen apps (wizard-ux issue 1830, switch wizard/pin-instant-open, off by default).
-// The real android-relay.js and single-app-session.js run in a vm with a stand-in Android bridge: the main page copies
-// the switch to the Android app (off only once the switches settle, on at once), a home-screen app window never does,
+// Instant home-screen apps (wizard-ux issue 1830, on for everyone; the switch wizard/pin-instant-open is gone).
+// The real android-relay.js and single-app-session.js run in a vm with a stand-in Android bridge: the main page tells
+// an older Android app (0.10.72 to 0.10.83, which kept a copy of the switch) once that it is on, a home-screen app window never does,
 // and the pinned page tells the Android app its shell release (before the app frame exists) and when the app's page
 // has loaded (so the saved last screen gives way). The Android half (skip Connecting, last screen, the phone-side
 // file cache) has JVM tests in android/app/src/test/java/ai/wizards/os/PinInstantPolicyTest.java and PinCacheTest.java;
@@ -37,17 +37,14 @@ function relay({ on = [], native = true, session = '' } = {}) {
   return { sent, set, settle, experience };
 }
 
-test('the main page copies the switch to the Android app: on at once, off only once settled', () => {
-  const off = relay();
-  assert.deepEqual(off.sent, [], 'nothing before the switches are known');
-  off.settle();
-  assert.deepEqual(off.sent, [false]);
-  off.experience(); assert.deepEqual(off.sent, [false], 'unchanged: not sent again');
-  const on = relay({ on: [SWITCH] });
-  assert.deepEqual(on.sent, [true]);
-  on.set([]); assert.deepEqual(on.sent, [true], 'an off before the switches settle waits');
-  on.settle(); assert.deepEqual(on.sent, [true, false]);
-  on.set([SWITCH]); assert.deepEqual(on.sent, [true, false, true]);
+test('the main page tells an older Android app once that it is on, whatever the old switch says', () => {
+  const plain = relay();
+  assert.deepEqual(plain.sent, [true], 'at once, with no switch saved');
+  plain.settle(); plain.experience(); plain.set([]);
+  assert.deepEqual(plain.sent, [true], 'once: switches settling or changing send nothing more');
+  const stale = relay({ on: [SWITCH] });
+  stale.settle(); stale.set([]); stale.settle();
+  assert.deepEqual(stale.sent, [true], 'a stale saved switch changes nothing');
 });
 
 test('a home-screen app window never sets it, and an older Android app without the bridge is left alone', () => {
@@ -109,12 +106,11 @@ test('an unstamped shell (no release) or an Android app without the calls: nothi
   await new Promise(r => setTimeout(r, 200));
 });
 
-test('the switch is in the catalog, off by default, and names its issue', async () => {
+test('the switch is gone: not in the catalog, and a saved on or off is cleared', async () => {
+  const catalog = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(!JSON.stringify(catalog).includes(SWITCH), 'not in the catalog');
   const { E, active } = experienceRuntime(); await E.refresh();
-  const row = E.state.tweaks.find(t => t.id === SWITCH);
-  assert.ok(row, 'listed'); assert.equal(row.on, false, 'off by default');
-  assert.equal((await E.defaults())[SWITCH], false); assert.ok(!active().includes(SWITCH), 'not loaded');
-  const m = JSON.parse(read('web/tweaks/wizard/pin-instant-open/manifest.json'));
-  assert.equal(row.name, m.name); assert.equal(m.id, SWITCH);
-  assert.deepEqual(m.issues, ['humanitylabs-org/wizard-ux#1830']);
+  assert.equal(E.state.tweaks.find(t => t.id === SWITCH), undefined, 'no row in Try new features');
+  assert.equal((await E.defaults())[SWITCH], undefined);
+  assert.ok(!active().includes(SWITCH), 'not loaded');
 });
