@@ -1,4 +1,4 @@
-// Ask before sharing feature counts (wizard-ux#1817, switch wizard/feature-counts-ask): Share feature counts
+// Ask before sharing feature counts (wizard-ux#1817; on for everyone, switch wizard/feature-counts-ask removed): Share feature counts
 // (wizard/try-feature-counts) stays off until the owner says Share to one prompt that names what is sent. Runs the real
 // counts + ask block of web/core/settings.js in node:vm with a small fake DOM.
 import test from 'node:test';
@@ -9,7 +9,7 @@ import vm from 'node:vm';
 const settings = readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
 const between = (a, b) => { const i = settings.indexOf(a), j = settings.indexOf(b, i); assert.ok(i >= 0 && j > i, `${a} .. ${b}`); return settings.slice(i, j); };
 const res = (status, body) => ({ status, ok: status >= 200 && status < 300, headers: { get: () => 'application/json' }, json: async () => body });
-const COUNTS = 'wizard/try-feature-counts', ASK = 'wizard/feature-counts-ask';
+const COUNTS = 'wizard/try-feature-counts';
 
 // A node with just what the prompt uses: listeners, closest(), querySelector by data attribute, remove().
 function node(attrs = {}, parent = null) {
@@ -24,7 +24,7 @@ function node(attrs = {}, parent = null) {
   return n;
 }
 
-function kit({ tweaks = ASK, fetchImpl = () => res(404, {}), store = {} } = {}) {
+function kit({ tweaks = '', fetchImpl = () => res(404, {}), store = {} } = {}) {
   const calls = [], toggles = [], body = [], docOn = {}, winOn = {};
   const documentElement = { dataset: { tweaks } };
   const ls = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
@@ -47,17 +47,16 @@ function kit({ tweaks = ASK, fetchImpl = () => res(404, {}), store = {} } = {}) 
 }
 const flush = () => new Promise(r => setImmediate(r));
 
-test('switch off: turning Share feature counts on is one tap as before, no prompt, nothing read', async () => {
+test('no switch: on any box, with no tweaks on, an app frame gets the thumb listener and Settings asks first', async () => {
   const k = kit({ tweaks: 'wizard/desktop-chats' });
-  assert.equal(k.T.askIntercept(COUNTS), false);
-  await k.T.askLook();
   const frame = { dataset: { ownApp: 'notes' }, contentDocument: node() };
   k.docOn.load[0]({ target: { tagName: 'IFRAME', ...frame } });
-  assert.equal(k.body.length, 0); assert.equal(k.calls.length, 0);
-  assert.equal(frame.contentDocument.on.click, undefined, 'no listener is added to app frames');
+  assert.equal(frame.contentDocument.on.click?.length, 1, 'the thumb listener is added to app frames');
+  assert.equal(k.T.askIntercept(COUNTS), true);
+  assert.equal(k.body.length, 1); assert.equal(k.calls.length, 0);
 });
 
-test('switch on: turning it on from Settings asks first; Share is the only way on, and nothing is sent before it', async () => {
+test('turning it on from Settings asks first; Share is the only way on, and nothing is sent before it', async () => {
   const k = kit();
   assert.equal(k.T.askIntercept(COUNTS), true);
   assert.equal(k.body.length, 1);
@@ -113,7 +112,7 @@ test('a thumb saved before is found on the next look (box catalog, then the apps
 });
 
 test('already sharing, or already answered: no prompt', async () => {
-  const on = kit({ tweaks: `${ASK} ${COUNTS}`, fetchImpl: () => res(200, { switches: [{ id: 'n:a', kind: 'app', vote: 'up' }], apps: [] }) });
+  const on = kit({ tweaks: COUNTS, fetchImpl: () => res(200, { switches: [{ id: 'n:a', kind: 'app', vote: 'up' }], apps: [] }) });
   await on.T.askLook(); assert.equal(on.T.el, null); assert.equal(on.calls.length, 0);
   const said = kit({ store: { 'wos.feature-counts.answer.v1': 'decline' }, fetchImpl: () => res(200, { switches: [{ id: 'n:a', kind: 'app', vote: 'up' }], apps: [] }) });
   await said.T.askLook(); assert.equal(said.T.el, null);

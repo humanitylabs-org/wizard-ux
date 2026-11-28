@@ -115,10 +115,8 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   const desks = () => (api.desks?.list || api.phone?.desks)?.() || [];
   // (AI apps round 16, opt-in: the picker of installed apps that are neither open nor pinned; see open(opts))
   let pick = null;
-  /* wizard-os#721 (switch wizard/app-picker-store-search, off by default): the picker's search also looks in the App
-   * Store, like the plain sheet's: matches you don't have yet are listed under your installed ones; a pick opens its
-   * Store page. Off: the picker never reads the Store. */
-  const storeSearchOn = () => { try { return String(root.dataset.tweaks || '').split(' ').includes('wizard/app-picker-store-search'); } catch (_) { return false; } };
+  /* wizard-os#721 (on for everyone): the picker's search also looks in the App Store, like the plain sheet's: matches
+   * you don't have yet are listed under your installed ones; a pick opens its Store page. */
   function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), pick?.includeOpen ? [] : openIds()).filter(a => !ex.has(a.id)); }
   function tile(a, cls = 'vc-tile') {
     const t = el('span', cls, { 'aria-hidden': 'true' }); t.style.setProperty('--c', colourOf(a));
@@ -241,9 +239,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     const hits = store.filter(a => matches(a, q) && !have.has(String(a.name || '').trim().toLowerCase()));
     if (hits.length) { const g = el('div', 'vc-rows', { role: 'list', 'aria-label': 'In the App Store' }); g.append(...hits.map(getRow)); out.push(section('In the App Store', hits.length), g); }
   }
-  // the picker with the Store search on, while the Store list is on its way (or can't be read): say so
+  // the picker, while the Store list is on its way (or can't be read): say so
   function pickStoreWait(out) {
-    if (!pick || !storeSearchOn() || store) return;
+    if (!pick || store) return;
     out.push(el('p', 'vc-empty vc-store-wait', { text: storeErr ? 'The App Store can’t be reached right now.' : 'Looking in the App Store…' }));
   }
   const storeBtn = text => { const all = el('button', 'vc-store', { type: 'button', text }); api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); }); return all; };
@@ -258,7 +256,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   }
   /** open(): the + sheet (Already open · Installed by kind · the App Store). open({ exclude, people }) (AI apps round 16):
    * the picker: only installed apps neither open nor in exclude() (his pins), 'For people' open, 'For agents' folded,
-   * no Already open row, a + Get more tile last; nothing from the App Store listed in it. */
+   * no Already open row, a + Get more tile last; a search also lists App Store matches you don't have (wizard-os#721). */
   function open(opts = null) {
     if (sheet) return;
     pick = opts && typeof opts === 'object' && !(typeof Event === 'function' && opts instanceof Event) && !opts.type ? opts : null;
@@ -282,7 +280,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     root.dataset.vcSheet = 'open';
     paint();
     const mine = sheet;
-    if (!pick || storeSearchOn()) Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
+    Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
     // the desktop types at once; the phone waits for a tap (no keyboard over the lists)
     if (shell === 'desktop') field.focus?.({ preventScroll: true }); else shut.focus?.({ preventScroll: true });
   }

@@ -1,14 +1,12 @@
 // wizard-os#721: on the AI apps desktop, "Add an app" (the Apps column's +) opens the app picker; typing a name there
-// also finds apps in the App Store that are not installed yet (switch wizard/app-picker-store-search), and picking one
-// opens that app's page in the App Store. Synthetic shell and a fake Store index, never a live API.
-//   QA_SWITCH=off: the picker as today (installed apps only, no App Store read).
+// also finds apps in the App Store that are not installed yet (on for everyone), and picking one opens that app's page
+// in the App Store. Synthetic shell and a fake Store index, never a live API.
 //   QA_OUT=<dir>: screenshots (picker-<skin>.png, cropped to the picker's left 412 px: picker-<skin>-crop.png).
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead, seedOwner } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict');
 const web = path.resolve(process.env.QA_WEB || path.join(__dirname, '..', 'web')), out = process.env.QA_OUT || '';
-const SW = process.env.QA_SWITCH !== 'off', SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
-const ID = 'wizard/app-picker-store-search';
+const SKINS = (process.env.QA_SKINS || 'nebula,grove').split(',');
 const ORIGIN = 'http://app-picker-store-search.test';
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
 // The Store index: two apps this Wizard does not have, one agent-only thing (not an app with a screen).
@@ -34,19 +32,18 @@ async function transport(ctx, seen) {
 const visible = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)].filter(b => b.offsetParent !== null).map(b => b.getAttribute('aria-label') || b.textContent.trim()), sel);
 (async () => {
   if (out) fs.mkdirSync(out, { recursive: true });
-  const b = await chromium.launch({ headless: true }), report = { switch: SW ? 'on' : 'off', cases: [] };
+  const b = await chromium.launch({ headless: true }), report = { cases: [] };
   try {
     for (const skin of SKINS) {
       const reads = [], ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
       await transport(ctx, reads); await ctx.addInitScript(seedOwner, { phone: false });
-      const mix = SW ? { [ID]: true } : {};
+      const mix = {};
       await ctx.addInitScript(([skin, mix]) => { if (window !== top) return; for (const [k, v] of Object.entries({ 'wux.shell': 'desktop', 'wos.shell': 'desktop', 'wos.skin': skin,
         'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix }) })) localStorage.setItem(k, v); }, [skin, mix]);
       const p = await ctx.newPage(), errors = [];
       p.on('pageerror', e => errors.push(String(e)));
       await p.goto(`${ORIGIN}/wizard-os-home/desktop.html`);
       await p.waitForFunction(() => document.documentElement.dataset.shell === 'desktop' && window.WosAppKinds, null, { timeout: 20000 });
-      if (SW) await p.waitForFunction(id => (document.documentElement.dataset.tweaks || '').split(' ').includes(id), ID, { timeout: 15000 });
       await p.addStyleTag({ content: '#wosWelcome{display:none!important}' });
       await p.waitForTimeout(800);
       await p.click('.aad-vall');
@@ -61,7 +58,7 @@ const visible = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)
         const w = 412, x = Math.max(0, Math.round(card.x));
         await p.screenshot({ path: path.join(out, `picker-${skin}-crop.png`), clip: { x, y: Math.max(0, card.y - 16), width: w, height: Math.min(900 - Math.max(0, card.y - 16), Math.max(500, card.height + 32)) } }); }
       const entry = { skin, idle, typed, errors };
-      if (SW) {
+      {
         assert.deepEqual(typed.store, ['Get Maps from the App Store'], `${skin}: the search finds Maps in the App Store (not the agent-only item, not Podcasts)`);
         assert.ok(typed.heads.includes('In the App Store'), `${skin}: an In the App Store section`);
         assert.deepEqual(idle.store, [], `${skin}: nothing from the Store before typing`);
@@ -70,15 +67,12 @@ const visible = (p, sel) => p.evaluate(sel => [...document.querySelectorAll(sel)
         await p.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.offsetParent !== null && /\/store\/index\.html\?app=wizard-maps/.test(f.src)), null, { timeout: 8000 });
         entry.opened = await p.evaluate(() => [...document.querySelectorAll('iframe')].map(f => f.src).find(s => /store\/index\.html\?app=/.test(s)).replace(location.origin, ''));
         assert.ok(!(await p.$('.vc-pick')), `${skin}: the picker closed`);
-      } else {
-        assert.deepEqual(typed.store, [], `${skin}: switch off, no App Store rows`);
-        assert.equal(typed.reads, 0, `${skin}: switch off, no App Store read`);
       }
       assert.deepEqual(errors, [], `${skin}: no page errors`);
       report.cases.push(entry);
       await ctx.close();
     }
     console.log(JSON.stringify(report, null, 1));
-    console.log(SW ? 'ok: Add an app search finds App Store apps and opens their Store page' : 'ok: switch off, the picker lists installed apps only');
+    console.log('ok: Add an app search finds App Store apps and opens their Store page');
   } finally { await b.close(); }
 })().catch(e => { console.error(e); process.exit(1); });
