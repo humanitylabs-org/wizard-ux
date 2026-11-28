@@ -56,6 +56,8 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
     const c = ch(wid), html = sid && sid !== '__new__' ? needsLineHtml(s) : '';
     const k = html ? turns.map(tn => !!tn.a && isFinite(tn.a.at)).lastIndexOf(true) : -1;
     if (k >= 0) { c.needsFor = sid; c.needsAt = turns[k].a.at; } else if (c.needsFor === sid) { c.needsFor = ''; c.needsAt = NaN; }
+    // The one reply card (wizard-ux issue 2064) draws this line's state and Mark done itself (chats-attach.js turnHtml).
+    c.needsCard = k >= 0 ? { state: needsAsk(s).state, done: LIVE.markHandled ? `<button type="button" class="ch-needs-done" data-chmarkdone>${MARK_DONE_SVG}Mark done</button>` : '' } : null;
     return { k, html: k >= 0 ? html : '' };
   }
   // Reply on the needs-you message (3a): handled through the reply it shows, once the owner's message is saved.
@@ -138,7 +140,7 @@ window.WizCore.chatsParts.done = function ({ attOf, ch, CH, CHAN_PREFS_KEY, chan
       nb.querySelectorAll('.msg.a[data-morph-key^="a"]').forEach(n => {
         const key = n.dataset.morphKey, at = +key.slice(1);
         // the message under an amber line counts once, as amber
-        if (at > c.jumpSince && !c.jumpSeen.has(key) && !n.previousElementSibling?.matches?.('[data-needs-line]')) add(n, 'new', key);
+        if (at > c.jumpSince && !c.jumpSeen.has(key) && !n.previousElementSibling?.matches?.('[data-needs-line]') && !n.querySelector('.ch-rcard[data-needs-line]')) add(n, 'new', key);
       });
     }
     return out;

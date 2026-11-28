@@ -1,0 +1,14 @@
+{
+  "id": "wizard/reply-card",
+  "name": "One reply card",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#2064"
+  ],
+  "description": "A long agent reply opens with one card: its Needs you dot (or Done / FYI), the whole summary (never cut short), one Mark done, and Show more / Show less to open and fold the full reply with its buttons. The separate Needs you line and the second Mark done at the bottom go. Short replies stay as they are."
+}

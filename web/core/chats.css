@@ -215,6 +215,20 @@ html:root .msg.a .ch-tweak .ch-tweak-upd button { padding: 6px 14px; border: 1px
 .ch-rlen-tx { display: grid; gap: 2px; }
 .ch-rlen-tx small { font-size: var(--wz-text-sm); font-weight: 500; color: var(--ink-3); }
 .msg.a .rless .rsum-chev { width: 14px; height: 14px; margin: 0; transform: rotate(180deg); }
+/* One reply card (wizard-ux issue 2064, switch wizard/reply-card): state, full summary, Mark done, Show more / Show less. */
+.msg.a .ch-rcard { display: grid; gap: 8px; margin: 0 0 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass, transparent); }
+.msg.a .ch-rcard.needs { border-left: 3px solid var(--amber); }
+.msg.a .ch-rcard-st { font-size: 0.8125rem; font-weight: 600; line-height: 1.35; }
+.msg.a .ch-rcard-st.done { color: var(--wz-success); }
+.msg.a .ch-rcard-st.done .ch-chan-dot { background: var(--wz-success); }
+.msg.a .ch-rcard-st.fyi { color: var(--ink-3); }
+.msg.a .ch-rcard-st.fyi .ch-chan-dot { background: var(--ink-3); }
+.msg.a .ch-rcard-sum { margin: 0; color: var(--ink); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.msg.a .ch-rcard-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; }
+.msg.a .ch-rcard-more { display: inline-flex; align-items: center; gap: 4px; min-height: 30px; margin-left: auto; padding: 0 6px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--wz-text-sm); cursor: pointer; }
+.msg.a .ch-rcard-more .rsum-chev { width: 14px; height: 14px; margin: 0; }
+.msg.a.rsum-open .ch-rcard-more .rsum-chev { transform: rotate(180deg); }
+.msg.a .ch-rcard-more:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
 .note-line { margin: 4px 0 4px 16px; padding-left: 10px; border-left: 1px solid var(--line-2); font-size: 13px; color: var(--ink-3); }
 .note-line p { margin: 0; }
 .dots { display: inline-flex; gap: 3px; } .dots b { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite; }

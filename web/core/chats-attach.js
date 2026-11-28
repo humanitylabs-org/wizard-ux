@@ -284,7 +284,9 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
       const body = sweep || (typeof rbBody === 'string' && rbBody) || (tn.a ? md(tn.a.text, (url, marker) => mediaHook(url, marker)) : '');
       const lead = summaryOf(tn.a), rk = esc(String(bAt));
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
-      const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
+      const card = !!lead && replyCardOn() ? replyCardHtml(c, tn.a, lead, rk, open, needs) : '';
+      if (card && needs) { needs = ''; c.cardDone = !!c.needsCard?.done; } // the card is this reply's Needs you line
+      const shown = card ? card + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}>${body}</div>` : lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
       const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
@@ -297,6 +299,21 @@ window.WizCore.chatsParts.attach = function ({ ch, CHEV_SVG, clip, COG_SVG, draf
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn(tt)}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
+  }
+  // One reply card (wizard-ux issue 2064, switch wizard/reply-card, off): a reply with a summary opens with one card,
+  // its state (the Needs you dot when this reply needs you, else Done / FYI), the full summary (the reply's own ask, never
+  // the chat list's 140-character clip), the one Mark done, and Show more / Show less for the full reply below it.
+  // Reply buttons, attachments and the bottom row stay; the thread's bottom row drops its second Mark done (c.cardDone).
+  // Declared after turnHtml (hoisted) so tests that slice turnHtml up to the next const keep them.
+  function replyCardOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/reply-card'); } catch (_) { return false; } }
+  function replyCardHtml(c, a, lead, rk, open, needs) {
+    const CARD_STATES = { needs_you: ['needs', 'Needs you'], check: ['needs', 'Your call'], done: ['done', 'Done'], fyi: ['fyi', 'FYI'] };
+    const nc = needs ? c.needsCard : null, st = CARD_STATES[nc ? nc.state : a.state === 'done' || a.state === 'fyi' ? a.state : ''];
+    return `<div class="ch-rcard${st ? ` ${st[0]}` : ''}"${nc ? ' data-needs-line role="status"' : ''}>`
+      + (st ? `<span class="ch-post-st ch-rcard-st ${st[0]}"><i class="ch-chan-dot" aria-hidden="true"></i>${st[1]}</span>` : '')
+      + `<p class="ch-rcard-sum">${esc(leadText(lead))}</p><div class="ch-rcard-acts">${nc?.done || ''}`
+      + `<button type="button" class="ch-rcard-more" data-reply-summary="${rk}" aria-expanded="${open}"><span class="ch-rcard-ml">${open ? 'Show less' : 'Show more'}</span>${CHEV_SVG}</button>`
+      + `<button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button></div></div>`;
   }
   const turnAt = tn => [tn.u?.at, tn.a?.at, tn.mediaAt].find(v => isFinite(v));
   return { addFiles, attachTray, CHECK_SVG, CLIP_SVG, fileUrl, hasContent, mediaOfFile, MIC_SVG, PEND, pendRef, PREVIEW, refreshCompose, refreshReply, syncSend, timeTag, toggleVoice, turnAt, turnHtml, UPLOAD_ABORT, uploadFile, userMedia, bindLate: v => { if ('PW' in v) PW = v.PW; } };
