@@ -230,6 +230,11 @@ async function interaction(p, row) {
         assert.equal(await p.locator('#wsList').count(), 1, 'Classic workspace menu exists for the negative oracle');
         assert.equal(await p.locator('#wsList').isVisible(), false, 'Classic workspace menubar is not visible');
         assert.equal(await p.locator('#logo').isVisible(), false, 'Classic Home menubar button is not visible');
+        // Lazy desk frames: on open only the desktop in view (and the last ones used here) loads its apps; the
+        // others load the first time they are shown. Show each restored desktop once, then come back.
+        row.bootFrames = await p.evaluate(() => document.querySelectorAll('.win iframe[src*="/qa-boot-apps/"]').length);
+        assert.ok(row.bootFrames < 5, 'restored desktops out of view did not load their apps on open: ' + row.bootFrames);
+        await p.evaluate(async () => { const back = __wux.cur; for (let i = 0; i < __wux.ws.length; i++) { __wux.goWs(i); await new Promise(r => setTimeout(r, 50)); } __wux.goWs(back); });
         await p.waitForFunction(() => [...document.querySelectorAll('.win iframe[src*="/qa-boot-apps/"]')].length === 5 && [...document.querySelectorAll('.win iframe[src*="/qa-boot-apps/"]')].every(f => f.contentWindow?.fixtureToolsRegistered));
         row.workspace = await p.evaluate(() => ({ wins: Object.values(__wux.wins).map(w => ({ id: w.id, app: w.app, appId: w.appId, thread: w.thread, companionOwner: w.companionOwner })), desks: __wux.ws.map(d => ({ id: d.id, wins: d.wins })), pins: [...document.querySelectorAll('.aad-vtab.is-pinned')].map(n => n.dataset.app), state: WosSkinHost.layoutState }));
         assert.equal(row.workspace.wins.filter(w => w.app === 'frame').length, 5, 'all four installed apps and companion survived');

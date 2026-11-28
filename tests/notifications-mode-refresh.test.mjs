@@ -49,7 +49,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
     $, $$: () => [],
     CHATS_APP: { id: 'wizard' }, APP: { wizard: { id: 'wizard' } },
     // Layout/Home work is outside this count regression; no production count function is mocked.
-    paintOrbBadge() {}, refreshHome() {}, paintFocus() {}, layout() {}, hudMount() {},
+    paintOrbBadge() {}, refreshHome() {}, paintFocus() {}, layout() {}, hudMount() {}, wakeShown() {},
     stage: {}, ws: [], W: {}, appOf: w => w, MOD: 'Alt+', homeOpen: false, pal: { hidden: true }, afterRender: null,
   });
   vm.runInContext(withLiveParts(read('web/live.js')), context);

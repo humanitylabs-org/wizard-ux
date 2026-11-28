@@ -245,10 +245,39 @@
   const { chatsUpDown, feedCarry, feedOpen, feedOpened, feedPane, feedPaneFor, listRows, listW, listWin, paneClicks, readyRows, setListW, sideMain, stepThread, syncChatsPane, viewKey, bindLate: listsLate } = window.WizCore.desktopParts.lists({ $$, APP, CHATS, desktopVars, feedSaved, findWin, focused, focusInside, focusWin, listWins, mainChats, newChat, openApp, openThread, panelWins, save, sidePanes, sideWin, stage, store, toast, uid, winEl, winTitle });
   sideviewLate({ feedOpen, feedOpened, feedPane, feedPaneFor, listWin, sideMain, syncChatsPane, viewKey });
   resizeLate({ listW, syncChatsPane });
+  /* Lazy app frames: an app window on a desktop out of view gets its page only when that desktop first comes into
+   * view, so opening the shell with twenty restored desktops loads the one in view (plus the last two used here),
+   * not twenty apps at once. Once loaded an app stays loaded. */
+  const RECENT_KEEP = 3; // the desktop in view and the two used before it
+  const recentDesks = () => { const r = store.get('recentDesks', []); return Array.isArray(r) ? r.filter(x => typeof x === 'string').slice(0, RECENT_KEEP) : []; };
+  const bootRecent = new Set(recentDesks()); // read once, before this session starts noting desktops
+  function noteRecent() {
+    const id = !homeOpen && ws[cur]?.id, r = recentDesks(); if (!id || r[0] === id) return;
+    store.set('recentDesks', [id, ...r.filter(x => x !== id)].slice(0, RECENT_KEEP));
+  }
+  function frameWanted(w) {
+    const i = wsOf(w.id);
+    return i < 0 || (!homeOpen && i === cur) || panelHas(w.id) || bootRecent.has(ws[i].id) || !!window.WosSkinHost?.routeShows?.(i);
+  }
+  // Every window now in view (or wanted) that is still waiting gets its page; render() calls this.
+  function wakeShown() {
+    $$('.wbody[data-lazy-frame]', stage).forEach(b => { const el = b.closest('.win'), w = el && W[el.dataset.win]; if (w && frameWanted(w)) wakeFrame(el, w); });
+    noteRecent();
+  }
+  function wakeFrame(el, w) {
+    const b = el.querySelector('.wbody[data-lazy-frame]'); if (!b) return;
+    const t = document.createElement('section'); t.innerHTML = winHtml(w); // detached: its frame loads once placed
+    b.removeAttribute('data-lazy-frame'); b.innerHTML = t.querySelector('.wbody').innerHTML;
+    window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el);
+  }
   function mountWin(w, host) {
     const el = document.createElement('section');
     el.className = 'win'; el.dataset.win = w.id; el.tabIndex = -1; el.setAttribute('aria-label', winTitle(w));
-    el.innerHTML = winHtml(w); host.appendChild(el);
+    el.innerHTML = winHtml(w);
+    // A frame not yet wanted leaves the window before it is placed, so it never starts loading.
+    const lazy = !['chats', 'pages', 'feature', 'settings'].includes(w.app) && w.appId !== 'troubleshooter' && !frameWanted(w) && el.querySelector('.wbody iframe');
+    if (lazy) { lazy.remove(); el.querySelector('.wbody').setAttribute('data-lazy-frame', ''); }
+    host.appendChild(el);
     if (w.app === 'chats') {
       const surface = CHATS.surface(w.id);
       surface.mount(el.querySelector('.pane-main'));
@@ -259,7 +288,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
+    else if (!lazy) { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   /* Watching an app frame for refusal and its services; desktop/desktop-frames.js. */
@@ -281,6 +310,7 @@
     }
     $$('.wsp', stage).forEach(el => { if (!ws.some(d => d.id === el.dataset.desk)) el.remove(); });
     hudMount(); if (globalThis.WosSkinHost?.panelMode) panelMount();
+    wakeShown();
     const home = $('#desktopHome');
     home.hidden = !homeOpen;
     if (homeOpen) paintHome(home, homeHtml(null));

@@ -9,7 +9,7 @@
 'use strict';
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
-window.WizCore.appParts.windows = function ({ $, $$, agentApp, agentWin, APP, appVars, CHATS, esc, HOME, ico, LIVE, MAXW, OUTBOX, parkDesks, refreshModes, RELOAD_BTN, renderChats, syncImmersive, track, winApp }) {
+window.WizCore.appParts.windows = function ({ $, $$, agentApp, agentWin, APP, appVars, CHATS, esc, HOME, ico, LIVE, MAXW, OUTBOX, parkDesks, refreshModes, RELOAD_BTN, renderChats, store, syncImmersive, track, winApp }) {
   let closeWin, paintHome, renderApp, renderDots, renderEmpty, renderFrame, renderHome, renderMoons, rideSettings, syncReviewChip, watchFrames; // late-bound: app.js declares these after the call, see bindLate
   function winTitle(w) {
     if (!w) return '';
@@ -42,6 +42,30 @@ window.WizCore.appParts.windows = function ({ $, $$, agentApp, agentWin, APP, ap
       default: return renderApp(w);
     }
   }
+  /* Lazy app frames: an app window on a desk out of view gets its page only when that desk first comes into view,
+   * so opening the shell with twenty restored desks loads the desk in view (plus the last two desks used here),
+   * not twenty apps at once. Until then the window holds the same loading veil an app shows while its page loads.
+   * Once loaded an app stays loaded (off-screen it is parked, as before). */
+  const RECENT_KEEP = 3; // the desk in view and the two used before it
+  const recentDesks = () => { const r = store.get('recentDesks', []); return Array.isArray(r) ? r.filter(x => typeof x === 'string').slice(0, RECENT_KEEP) : []; };
+  const bootRecent = new Set(recentDesks()); // read once, before this session starts noting desks
+  function noteRecent() {
+    const id = appVars.desks[appVars.idx]?.id, r = recentDesks(); if (!id || r[0] === id) return;
+    store.set('recentDesks', [id, ...r.filter(x => x !== id)].slice(0, RECENT_KEEP));
+  }
+  function frameWanted(w) {
+    const i = deskOf(w.id);
+    return i < 0 || i === appVars.idx || bootRecent.has(appVars.desks[i].id);
+  }
+  // The desk in view gets its windows' pages now (app.js parkDesks calls this whenever desks move or change).
+  function wakeDesk() {
+    const sec = secOf(appVars.idx); if (!sec) return;
+    for (const b of $$('.wbody[data-lazy-frame]', sec)) {
+      const el = b.closest('.win'), w = el && appVars.W[el.dataset.win]; if (!w) continue;
+      b.removeAttribute('data-lazy-frame'); b.innerHTML = winBody(w); watchFrames(el);
+    }
+    noteRecent();
+  }
   function makeWin(w) {
     // Legacy inline-app descriptors retain their id, desk and pin; the registry now owns their view.
     if (APP[w.app]?.kind === 'wizard' && APP[w.app]?.url) { w.appId = w.app; w.app = 'frame'; }
@@ -54,6 +78,9 @@ window.WizCore.appParts.windows = function ({ $, $$, agentApp, agentWin, APP, ap
       ${w.app === 'frame' ? window.WosOwnViews?.marker(a) || '' : ''}${w.app === 'frame' && window.WosAppRoute ? window.WosAppRoute.slot(w.appId) : ''}${refreshModes.length ? RELOAD_BTN : ''}<button class="wb" data-wact="full" aria-label="Full screen"><svg viewBox="0 0 24 24"><path class="i-grow" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><path class="i-shrink" d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg></button>
       <button class="wb" data-wact="close" aria-label="Close window"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17"/></svg></button></header>
       <div class="wbody">${winBody(w)}</div><div class="shield" aria-hidden="true"></div>`;
+    // A frame not yet wanted leaves the window before the window is placed, so it never starts loading.
+    const f = w.app === 'frame' && w.appId !== 'troubleshooter' && !frameWanted(w) && el.querySelector('.wbody iframe.appframe');
+    if (f) { f.remove(); $('.wbody', el).setAttribute('data-lazy-frame', ''); }
     return el;
   }
   function mountWin(w, el) {
@@ -130,5 +157,5 @@ window.WizCore.appParts.windows = function ({ $, $$, agentApp, agentWin, APP, ap
     $('.nebula').style.transform = `translate3d(${(-appVars.idx + 2) * -3 + dx * .01}%,0,0)`;
     window.WosScenery?.still('stars'); // scenery hook: star parallax follows the desk (one still frame; core/scenery.js)
   }
-  return { applyLayout, buildDesks, deskName, deskOf, focusedWin, isReviewDesk, makeWin, mountWin, placeTrack, renderDesk, secOf, syncDesks, winEl, winTitle, bindLate: v => { if ('closeWin' in v) closeWin = v.closeWin; if ('paintHome' in v) paintHome = v.paintHome; if ('renderApp' in v) renderApp = v.renderApp; if ('renderDots' in v) renderDots = v.renderDots; if ('renderEmpty' in v) renderEmpty = v.renderEmpty; if ('renderFrame' in v) renderFrame = v.renderFrame; if ('renderHome' in v) renderHome = v.renderHome; if ('renderMoons' in v) renderMoons = v.renderMoons; if ('rideSettings' in v) rideSettings = v.rideSettings; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; if ('watchFrames' in v) watchFrames = v.watchFrames; } };
+  return { applyLayout, buildDesks, deskName, deskOf, focusedWin, isReviewDesk, makeWin, mountWin, placeTrack, renderDesk, secOf, syncDesks, wakeDesk, winEl, winTitle, bindLate: v => { if ('closeWin' in v) closeWin = v.closeWin; if ('paintHome' in v) paintHome = v.paintHome; if ('renderApp' in v) renderApp = v.renderApp; if ('renderDots' in v) renderDots = v.renderDots; if ('renderEmpty' in v) renderEmpty = v.renderEmpty; if ('renderFrame' in v) renderFrame = v.renderFrame; if ('renderHome' in v) renderHome = v.renderHome; if ('renderMoons' in v) renderMoons = v.renderMoons; if ('rideSettings' in v) rideSettings = v.rideSettings; if ('syncReviewChip' in v) syncReviewChip = v.syncReviewChip; if ('watchFrames' in v) watchFrames = v.watchFrames; } };
 };
