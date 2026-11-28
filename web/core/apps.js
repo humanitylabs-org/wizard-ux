@@ -113,19 +113,16 @@
   window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
   // The repo an installed app came from ('' when the box's list does not say), read by core/browser-boundary.js.
   window.WizCore.appRepo = id => REMOTE.find(a => a.id === id)?.repo || '';
-  /* Location only for the apps that ask for it (wizard-ux issue 1629, switch wizard/app-location, off by default). The
-   * shell's header allows location for Wizard's own origin, so every frame says who may use it through its `allow`:
-   * an app frame gets `geolocation` only while the switch is on AND the box's app list says that app declared
+  /* Location only for the apps that ask for it (wizard-ux issue 1629, on for everyone; the switch wizard/app-location
+   * is gone). The shell's header allows location for Wizard's own origin, so every frame says who may use it through
+   * its `allow`: an app frame gets `geolocation` only when the box's app list says that app declared
    * `permissions: [geolocation]` in its wizard.md (today only Maps); every other frame gets `geolocation 'none'`, so
-   * its navigator.geolocation is denied with no prompt, exactly as before. The browser (or the Android/Mac app) still
-   * asks the owner before the first position. Pass the app's id, or for a link sheet the page URL (longest app address). */
-  const LOCATION_SWITCH = 'wizard/app-location';
+   * its navigator.geolocation is denied with no prompt. The browser (or the Android/Mac app) still asks the owner
+   * before the first position. Pass the app's id, or for a link sheet the page URL (longest app address). */
   window.WizCore.frameAllow = (base, { id = '', url = '' } = {}) => {
-    let on = false;
-    try { on = String(document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(LOCATION_SWITCH); } catch (_) {}
     let app = null;
-    if (on && id) app = REMOTE.find(a => a.id === String(id)) || null;
-    else if (on && url) {
+    if (id) app = REMOTE.find(a => a.id === String(id)) || null;
+    else if (url) {
       try {
         const u = new URL(url, location.href);
         let best = 0;
@@ -140,10 +137,9 @@
     const yes = !!app && Array.isArray(app.permissions) && app.permissions.includes('geolocation');
     return `${base ? base + '; ' : ''}geolocation${yes ? '' : " 'none'"}`;
   };
-  // Keeps every open frame's location rule in step with the switch and the box's app list. Off (here or from another
-  // device), or an app no longer declaring it: the frame loses `geolocation`. On, or the box's list arriving after an
-  // app's frame was drawn (a fresh start, ?open=maps, a restored window: the shell draws before the box answers): an
-  // app's own frame that declared it gains `geolocation`. Either way the frame reloads, because a browser applies a
+  // Keeps every open frame's location rule in step with the box's app list. An app no longer declaring it: the frame
+  // loses `geolocation`. The box's list arriving after an app's frame was drawn (a fresh start, ?open=maps, a restored
+  // window: the shell draws before the box answers): an app's own frame that declared it gains `geolocation`. Either way the frame reloads, because a browser applies a
   // frame's `allow` only to its next page. Gaining it never grants anything: the browser or phone still asks the owner.
   // Only app frames gain it (an app window, the pinned app page, the link sheet), never a hidden service frame.
   const LOC_ON = /(^|;)\s*geolocation\s*(;|$)/;
@@ -173,11 +169,6 @@
     return n;
   };
   window.WizCore.relockLocation = relockLocation;
-  try {
-    if (typeof MutationObserver === 'function' && document.documentElement) {
-      new MutationObserver(() => relockLocation()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
-    }
-  } catch (_) {}
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
