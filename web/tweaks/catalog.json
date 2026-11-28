@@ -36,7 +36,6 @@
     "wizard/backup-health",
     "wizard/auto-tags",
     "wizard/first-chat-goals",
-    "wizard/pin-instant-open",
     "wizard/new-chat-chips",
     "wizard/catch-up-sent"
   ],

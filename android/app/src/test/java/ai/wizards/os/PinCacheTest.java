@@ -185,7 +185,7 @@ public class PinCacheTest {
     }
 
     @Test
-    public void switchOffLeavesNothingOnThePhone() throws Exception {
+    public void clearLeavesNothingOnThePhone() throws Exception {
         File dir = Files.createTempDirectory("pin-cache").toFile();
         open(dir, search(), "aaaaaaaaaaaa");
         assertTrue(dir.listFiles().length > 0);

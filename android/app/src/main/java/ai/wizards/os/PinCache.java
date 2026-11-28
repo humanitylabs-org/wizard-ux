@@ -18,9 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * The phone-side file cache of a home-screen app window (wizard-ux issue 1830, switch wizard/pin-instant-open). Plain
+ * The phone-side file cache of a home-screen app window (wizard-ux issue 1830, on for everyone). Plain
  * Java (org.json only), so PinCacheTest runs it on the JVM with a fake box. MainActivity.shouldInterceptRequest asks
- * {@link #answer} for every request of a pinned window while the switch is on; null means "pass it through untouched".
+ * {@link #answer} for every request of a pinned window; null means "pass it through untouched".
  *
  *  - The app's page (an HTML read from inside the window) always goes to the box, as a conditional read when a copy is
  *    kept (usually a 304). What identifies that version of the page (validators, else bytes) becomes the app's
