@@ -18,7 +18,7 @@ function toWam(req) {
     const body = req.postData() || '';
     const h = req.headers();
     const headers = { 'Tailscale-User-Login': 'owner@example.com', 'X-Forwarded-For': ['100', '64', '0', '9'].join('.'),
-      ...(h.origin ? { Origin: h.origin } : {}), ...(h['x-wizard-store'] ? { 'X-Wizard-Store': h['x-wizard-store'] } : {}),
+      ...(h.origin ? { Origin: h.origin } : {}), ...(h['x-wizard-store'] ? { 'X-Wizard-Store': h['x-wizard-store'] } : {}), ...(h['idempotency-key'] ? { 'Idempotency-Key': h['idempotency-key'] } : {}),
       ...(h['content-type'] ? { 'Content-Type': h['content-type'] } : {}), 'Content-Length': Buffer.byteLength(body) };
     const r = http.request(u, { method: req.method(), headers }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve({ status: res.statusCode, body: d })); });
     r.on('error', reject); r.end(body);
