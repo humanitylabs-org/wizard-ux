@@ -1,0 +1,14 @@
+{
+  "id": "wizard/archive-hold",
+  "name": "Archive stays archived",
+  "version": "1.0.0",
+  "author": "wizard",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "issues": [
+    "humanitylabs-org/wizard-ux#2063"
+  ],
+  "description": "Archive works like TG style: one click archives a chat, settled or still working, and it stays archived. It no longer pops back while Wizard's list catches up, and the reply to a run that was going when you archived it doesn't bring it back. A chat comes back only when you tap Restore, when you send in it yourself, or when the agent starts a new message there itself (a watch, a schedule); then its row says \"Back: <agent> wrote\" until you open it."
+}

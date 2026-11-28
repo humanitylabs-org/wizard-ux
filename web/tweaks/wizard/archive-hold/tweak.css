@@ -1,0 +1,2 @@
+/* Archive stays archived (wizard-ux issue 2063): the "Back: <agent> wrote" tag on a chat the agent brought back. */
+html[data-tweaks~="wizard/archive-hold"] .ch-list .ch-ib-pv .ch-ib-back { font-style: normal; font-weight: 600; color: var(--wz-accent, currentColor); }

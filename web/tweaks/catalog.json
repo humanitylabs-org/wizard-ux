@@ -33,7 +33,8 @@
     "wizard/auto-tags",
     "wizard/catch-up-sent",
     "wizard/feature-counts-privacy",
-    "wizard/reply-card"
+    "wizard/reply-card",
+    "wizard/archive-hold"
   ],
   "defaults": [],
   "promotedDefaults": [],

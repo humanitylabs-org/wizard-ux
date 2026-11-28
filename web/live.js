@@ -233,6 +233,7 @@
       else if (!s.restoredAt || Date.parse(r) > Date.parse(s.restoredAt)) s.restoredAt = r;
     }
     const o = OVER.get(s.id); if (o) Object.assign(s, o.patch);
+    if (typeof holdApply === 'function') holdApply(s); // wizard-ux issue 2063 (tests slice applyLocal without it)
     applyPend(s);
     // A Stop James asked for shows as “Stopping…” until Wizard reports the run settled (max 2 min).
     const st = s.runId && STOPPING.get(s.runId);
@@ -253,6 +254,49 @@
   // is held; addSynthetic reads it (a stand-in is only built while the send is held), and a Restore or the next mark
   // ends it.
   const ARCHIVED_NEW = new Set();
+  /* ---- Archive like TG style (wizard-ux issue 2063, switch wizard/archive-hold, off by default) ----
+   * Archive holds the chat archived on this device for 60 s whatever the box's list says (it answers with the old state
+   * for ~15 s), and remembers the run that was still going. After that, when the box shows the chat un-archived: his own
+   * send (or an approval wait) lets it back quietly; the reply of the run that was going keeps it archived and writes
+   * archived again, so his other devices follow; new agent words from another run let it back with a "Back: <agent>
+   * wrote" tag (archiveBack) until he opens it; nothing new at all (a Restore on another device) lets it back quietly.
+   * Restore here ends it. With the switch off none of this runs. */
+  const ARCHIVE_HOLD = 'wizard/archive-hold', HOLD_KEY = 'wos.archive-hold.v1', BACK_KEY = 'wos.archive-back.v1', HOLD_MS = 60000, HOLD_DAYS = 14;
+  const holdOn = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ARCHIVE_HOLD); } catch (_) { return false; } };
+  const holdRead = k => { try { const v = JSON.parse(localStorage.getItem(k) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (_) { return {}; } };
+  const holdWrite = (k, v) => { try { const keys = Object.keys(v); for (const x of keys.slice(0, Math.max(0, keys.length - 300))) delete v[x]; localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
+  const HOLD = holdRead(HOLD_KEY), BACK = holdRead(BACK_KEY), REARCHIVED = new Map();
+  const holdMs = v => { const t = typeof v === 'number' ? v : Date.parse(v ?? ''); return isFinite(t) ? t : 0; };
+  function holdStart(s) {
+    if (!s || !holdOn()) return;
+    const k = titleScope(s); delete BACK[k];
+    HOLD[k] = { at: Date.now(), run: WORKING.has(s.status) || inWorking(s) ? s.runId || '*' : '' };
+    holdWrite(HOLD_KEY, HOLD); holdWrite(BACK_KEY, BACK);
+  }
+  function holdEnd(k, back = false) {
+    delete HOLD[k]; holdWrite(HOLD_KEY, HOLD);
+    if (back) { BACK[k] = Date.now(); holdWrite(BACK_KEY, BACK); }
+  }
+  function holdApply(s) {
+    if (!s || !holdOn()) return;
+    const k = titleScope(s), h = HOLD[k]; if (!h) return;
+    const now = Date.now(), pend = PEND.get(s.id);
+    if (now - h.at > HOLD_DAYS * DAY) { holdEnd(k); return; }
+    // His own send (from any device), or the run now waits for his approval: back with no tag.
+    if (Math.max(holdMs(s.lastUserAt), holdMs(pend?.at)) > h.at || needsApproval(s)) { holdEnd(k); return; }
+    if (now - h.at < HOLD_MS) { s.archived = true; return; }
+    if (s.archived) return;
+    const agentAt = Math.max(holdMs(s.lastAssistantAt), s.previewRole === 'assistant' ? holdMs(s.previewAt) : 0);
+    if (agentAt <= h.at) { holdEnd(k); return; } // nothing new: restored on another device
+    if (h.run && (h.run === '*' || !s.runId || s.runId === h.run)) {
+      // The reply of the run that was going when he archived: it stays archived, on the box too.
+      s.archived = true; h.at = now; h.run = ''; holdWrite(HOLD_KEY, HOLD);
+      const id = s.id; if (now - (REARCHIVED.get(k) || 0) > 10000) { REARCHIVED.set(k, now);
+        setTimeout(() => { req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }).catch(() => {}); }, 0); }
+      return;
+    }
+    holdEnd(k, true); // the agent started something new here itself
+  }
   const STOPPING = new Map(); // runId -> when Stop was asked (applyLocal)
   const STOP_SEND_MS = 15000, STOP_FOLLOW_MS = [800, 800, 900, 1500, 2000, 3000, 4000, 7000]; // gaps between re-reads, ~20 s in all
   // Every row of a run: the lists, rows read on their own (search, direct lookup, Spaces) and the thread Stop was tapped on.
@@ -807,6 +851,8 @@
       const list = all;
       if (!list.length) return;
       const records = list.map(s => [seenKeyOf(s), s]);
+      // Issue 2063: opening a chat that came back takes its "Back: <agent> wrote" tag away.
+      if (typeof BACK !== 'undefined') for (const s of list) if (BACK[titleScope(s)]) { delete BACK[titleScope(s)]; holdWrite(BACK_KEY, BACK); }
       let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
       const threads = { ...state.threads };
       for (const [k, s] of records) threads[k] = seenRecord(threads[k], s, ts);
@@ -1125,6 +1171,10 @@
     _archivedNew(id, on) { if (!on) { ARCHIVED_NEW.delete(id); return; } for (const k of ARCHIVED_NEW) if (PEND.get(k)?.kind !== 'new') ARCHIVED_NEW.delete(k); ARCHIVED_NEW.add(id); if (ARCHIVED_NEW.size > 50) ARCHIVED_NEW.delete(ARCHIVED_NEW.values().next().value); },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
+    // Archive like TG style (wizard-ux issue 2063, switch wizard/archive-hold): whether Archive holds (the toast no
+    // longer promises it comes back when done), and whether this chat came back because the agent wrote in it.
+    archiveHolds: () => typeof holdOn === 'function' && holdOn(),
+    archiveBack(s) { return !!s && !s.archived && typeof holdOn === 'function' && holdOn() && !!BACK[titleScope(s)]; },
     async _act(id, patch, write, capMs = 60000) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
       // A hidden worker thread is never in the list, so the next list read would drop the row this action patches and
@@ -1151,7 +1201,10 @@
       // only once the archive itself succeeded (a failed archive keeps the result Continue-able).
       const saved = this.session(id);
       if (!file && (saved?.synthetic || this._pendingNew?.(id))) this._archivedNew?.(id, true);
-      return this._act(id, { archived: true, deferred: false }, async s => {
+      // Issue 2063 (switch wizard/archive-hold): hold it archived here, and retry a refused write once after 1.2 s.
+      const hold = !file && typeof holdOn === 'function' && holdOn() && !!saved, was = saved?.archived; // (tests slice archive without it)
+      if (hold) holdStart(saved);
+      const act = () => this._act(id, { archived: true, deferred: false }, async s => {
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
         const ag = this.agentOf(id);
@@ -1162,7 +1215,18 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      }, file ? 11 * 60000 : 60000).then(ok => {
+      }, file ? 11 * 60000 : 60000);
+      const again = ok => {
+        if (ok || !hold) return ok;
+        const c = this.session(id); if (c) { c.archived = true; this.emit(); }
+        return new Promise(res => setTimeout(res, 1200)).then(act).then(ok2 => {
+          if (ok2) return true;
+          holdEnd(titleScope(saved));
+          const c2 = this.session(id); if (c2) { c2.archived = !!was; this.emit(); }
+          return false;
+        });
+      };
+      return act().then(again).then(ok => {
         if (!ok) this._archivedNew?.(id, false);
         if (ok) this.dismissSaved?.(saved);
         // A background task's waiting record goes with its thread (wizard-ux issue 1928): its Inbox row too.
@@ -1228,15 +1292,18 @@
     restore(id) {
       this._archivedNew?.(id, false);
       const s = this.session(id); if (!s) return Promise.resolve(false);
+      // Issue 2063: his Restore ends the hold; it is set aside during the write and put back if the write fails.
+      const hk = titleScope(s), held = typeof HOLD !== 'undefined' ? HOLD[hk] : null; if (held) holdEnd(hk);
+      const unheld = ok => { if (!ok && held && !HOLD[hk]) { HOLD[hk] = held; holdWrite(HOLD_KEY, HOLD); } return ok; };
       const at = new Date().toISOString();
-      if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false));
+      if (s.deferred && !s.archived) return this._act(id, { deferred: false, restoredAt: at }, () => this._defer(id, false)).then(unheld);
       return this._act(id, { archived: false, deferred: false, restoredAt: at }, async () => {
         await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: false }) });
         writeRestored({ ...readRestored(), [id]: at });
       }).then(ok => {
         // Undo / Restore brings back the waiting record its archive took (wizard-ux issue 1928).
         if (ok) try { void this.agentInbox?.restoreThread?.(id); } catch (_) {}
-        return ok;
+        return unheld(ok);
       });
     },
     /* One thread's own state by id, stored nowhere (wizard-ux issue 1928): the Inbox reads a hidden worker thread's
