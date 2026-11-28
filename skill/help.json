@@ -369,10 +369,6 @@
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
     },
-    "wizard/private-ai-nudge": {
-      "help": "Installing a personal-data app suggests private AI.",
-      "where": "Settings › Appearance › Try new features › Install sheet recommends private AI"
-    },
     "wizard/get-set-up": {
       "help": "Setup lists optional accounts to connect.",
       "where": "Settings › Appearance › Try new features › Get set up list in Setup"
@@ -412,10 +408,6 @@
     "wizard/pin-instant-open": {
       "help": "Android: pinned app icons open at once on their last screen.",
       "where": "Settings › Appearance › Try new features › Instant home-screen apps"
-    },
-    "wizard/phone-badge-look": {
-      "help": "Android: Messenger icon count shows the exact number in a One UI-style corner badge.",
-      "where": "Settings › Appearance › Try new features › One UI icon count"
     },
     "wizard/phone-recovery-mode": {
       "help": "Android: a frozen start reopens in recovery mode.",
@@ -662,6 +654,7 @@
   },
   "retired": {
     "Backup health in Resources": "on for everyone, nothing to turn on: Home › Resources › Health shows this box's own backup (when it last ran, whether it was checked, warnings in plain words), and when a backup leaves your main agent out you are told once and Include it adds it after checking there is room on the disk.",
+    "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
     "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
     "Thread tracker": "retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.",
@@ -670,6 +663,7 @@
     "Shorter app updates": "on for everyone, nothing to turn on: an app update stops the app once, for seconds.",
     "Wizard for Mac in About & updates": "on for everyone, nothing to turn on: inside Wizard for Mac, Settings › About & updates shows a Wizard for Mac group under WizardOS.",
     "Reply to Telegram and Slack chats": "on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.",
-    "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected."
+    "Models from your connectors": "removed: the model menu in Chats lists the models of every AI connection you connected.",
+    "One UI icon count": "on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner."
   }
 }

@@ -1,23 +1,12 @@
-// Install sheet recommends private AI (wizard-ux issue 1802, switch wizard/private-ai-nudge): the card's rules.
+// Install sheet recommends private AI (wizard-ux issue 1802; on for everyone, no switch): the card's rules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NUDGE_SWITCH, nudgeOn, nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, personalSentence, standardOf, withStandard } from '../web/store/store-private-nudge.js';
+import { nudgeDue, nudgeHtml, nudgeStatus, personalApp, providerWord, personalSentence, standardOf, withStandard } from '../web/store/store-private-nudge.js';
 
 const MAIN = { id: 'hermes', label: 'Wizard', privacy: 'standard', is_default: true };
 const WORK = { id: 'work', label: 'Work', privacy: 'standard', is_default: false };
 const PRIV = { id: 'private', label: 'Private', privacy: 'private', is_default: false };
 const view = (privacy, agents, extra = {}) => ({ privacy, ...(privacy === 'private' ? { needs_private_agent: !agents.some(a => a.privacy === 'private') } : {}), agents, ...extra });
-const doc = tweaks => ({ documentElement: { getAttribute: n => (n === 'data-tweaks' ? tweaks : null) } });
-
-test('the switch is read from the shell around the Store, and is off by default', () => {
-  const shell = { document: doc(`a/b ${NUDGE_SWITCH}`) };
-  assert.equal(nudgeOn({ parent: shell, document: doc('') }), true);
-  assert.equal(nudgeOn({ parent: { document: doc('wizard/private-mode') }, document: doc('') }), false);
-  const self = { document: doc(NUDGE_SWITCH) }; self.parent = self;
-  assert.equal(nudgeOn(self), true, 'standalone Store reads its own page');
-  assert.equal(nudgeOn({ parent: { get document() { throw new Error('cross-origin'); } }, document: doc('') }), false);
-});
-
 test('the card is due only for a personal-data app on a box with no private agent that nobody has yet', () => {
   assert.equal(nudgeDue(view('private', [{ ...MAIN, enabled: false }])), true);
   assert.equal(nudgeDue(view('standard', [{ ...MAIN, enabled: true }])), false, 'no declaration: no card');
