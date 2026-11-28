@@ -1,12 +1,11 @@
-// Browser QA for the browser owner boundary (wizard-os#133, slice 41): the Welcome's provider sign-in and the
-// Importer are app pages, sandboxed like any app window. Real Chromium: a shell page with the boundary on and the real
+// Browser QA for the browser owner boundary (wizard-os#133, slice 41): the Welcome's provider sign-in is an
+// app page, sandboxed like any app window. Real Chromium: a shell page with the boundary on and the real
 // core/browser-boundary.js, core/app-services.js and core/welcome.js; the app pages load the real core/app-client.js.
 // An opaque page's own fetch goes out with `Origin: null` and no cookie, and the browser hides the answer, so before
 // this slice the sign-in page could not reach its own backend from inside the Welcome (signing in never finished)
 // and its saved settings threw. Now the Welcome attaches the frame as that app's window:
 //  - Connect your AI › Claude: the sign-in page reads its status and posts the sign-in to its own backend (with the
 //    owner's cookie, no token), keeps a setting in localStorage, and Esc inside it still steps the Welcome back.
-//  - Bring your AI: the Importer page loads its sources from its own backend the same way.
 //  - Neither page can reach an owner route or another app (Origin null, no cookie, no token, refused).
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-welcome-signin.cjs
 //   QA_WEB=<another web/ dir, e.g. main's> QA_EXPECT=broken: the backend and storage checks must fail there.
@@ -145,13 +144,7 @@ async function appFrame(page, p) {
   const left = await page.evaluate(() => window.WizAppServices.inspect().map(x => x.appId));
   check(!left.includes('wizard-claude'), `sign-in: leaving the step lets the window go (${JSON.stringify(left)})`);
 
-  // Welcome › Bring your AI › the Importer.
-  await page.evaluate(() => { window.WosWelcome.close(); window.WosWelcome.open('bring'); });
-  await page.click('[data-wl="bring"]');
-  const imp = await appFrame(page, '/importer/');
-  await imp?.waitForFunction(() => window.sources !== undefined, null, { timeout: 5000 }).catch(() => {});
-  const sources = imp ? await Promise.race([imp.evaluate(() => window.sources), new Promise(r => setTimeout(() => r('timeout'), 6000))]).catch(e => 'error:' + e.message) : 'no frame';
-  check(Array.isArray(sources) && sources.length === 2, `importer: loads its sources from its own backend (${JSON.stringify(sources)})`);
+  // (Bring your AI left the Welcome with Get set up, wizard-ux issue 1837: the Importer opens as its own app.)
   await page.evaluate(() => window.WosWelcome.close());
   const after = await page.evaluate(() => window.WizAppServices.inspect().length);
   check(after === 0, `closing the Welcome lets every window go (${after})`);

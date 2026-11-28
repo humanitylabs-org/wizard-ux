@@ -369,10 +369,6 @@
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
     },
-    "wizard/get-set-up": {
-      "help": "Setup lists optional accounts to connect.",
-      "where": "Settings › Appearance › Try new features › Get set up list in Setup"
-    },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"
@@ -644,6 +640,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Get set up list in Setup": "on for everyone: Setup lists optional accounts to connect; the Welcome asks only for AI sign-in.",
     "Ask before sharing feature counts": "on for everyone: Share feature counts stays off until you tap Share on a prompt naming what is sent; it opens on your first thumb.",
     "Add an app: search the App Store too": "on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.",
     "Result reader": "on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.",

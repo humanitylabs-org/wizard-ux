@@ -100,7 +100,7 @@ html[data-layout="phone"] .url { cursor: pointer; }
 /* Signal uses square edges and monospace labels, not colour alone. */
 html[data-skin="signal"] { --setup-r: 2px; }
 .recommended { margin-top: 32px; }
-/* Get set up (wizard-ux issue 1837, switch wizard/get-set-up): same rows as the checklist, a state word at the end. */
+/* Get set up (wizard-ux issue 1837): same rows as the checklist, a state word at the end. */
 .get-set-up { margin-top: 32px; }
 .get-set-up h2 { font-size:var(--wz-text-heading); margin: 0 0 8px; color: var(--wz-text, var(--wz-accent)); }
 .get-set-up .intro { margin-bottom: 16px; }

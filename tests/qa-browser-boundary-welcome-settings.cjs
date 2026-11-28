@@ -3,7 +3,6 @@
 // core/shell-token.js, core/browser-boundary.js and core/welcome.js. App pages load the real core/app-client.js.
 //  - Welcome › Connect your AI: the provider's sign-in page is sandboxed (opaque, can't reach the shell, its owner
 //    call goes out with Origin null and no token), and Esc pressed inside it still steps the Welcome back.
-//  - Welcome › Bring your AI: the Importer page is sandboxed the same way.
 //  - Settings › Connections (the App Manager's view at store-install/_connections/, which loads core/shell-token.js
 //    first, wizard-app-manager connections_view.py): stays same-origin and its api/ calls carry the token.
 //   QA_PLAYWRIGHT=<path to playwright> node tests/qa-browser-boundary-welcome-settings.cjs
@@ -102,10 +101,7 @@ async function opaqueApp(page, p, label) {
   const backTo = await page.evaluate(() => ({ frame: !!document.querySelector('.wl-frame iframe'), title: document.querySelector('.wl-card h2')?.textContent }));
   check(!backTo.frame && backTo.title === 'Connect your AI', `sign-in: Esc inside the page steps back (${JSON.stringify(backTo)})`);
 
-  // Welcome › Bring your AI › the Importer.
-  await page.evaluate(() => { window.WosWelcome.close(); window.WosWelcome.open('bring'); });
-  await page.click('[data-wl="bring"]');
-  await opaqueApp(page, '/importer/', 'importer');
+  // (Bring your AI left the Welcome with Get set up, wizard-ux issue 1837: the Importer opens as its own app.)
   await page.evaluate(() => window.WosWelcome.close());
 
   // Settings › Connections: owner code, same-origin, armed.

@@ -153,7 +153,7 @@
     // Preserve the approved Setup entry: a separate tinted action below the completed checklist row.
     if (st === 'done') h += '<button class="wz-button add-device" data-act="list-connect-device">Connect another device</button>';
     if (L.status === 'neterr') h += '<button class="link wz-button secondary" data-act="retry-list">Try again</button>';
-    // Get set up (wizard-ux issue 1837, switch wizard/get-set-up): the optional accounts list, right after the phone row.
+    // Get set up (wizard-ux issue 1837): the optional accounts list, right after the phone row.
     if (L.status === 'ok') h += window.WosGetSetUp?.html() || '';
     if (L.status === 'ok') h += window.WosRecommended?.html() || '';
     h += '<p class="foot custom" data-customize>Everything you see is customizable. Try asking your Wizard for one change.</p>';
