@@ -249,7 +249,7 @@ public final class BackgroundAudioService extends MediaSessionService {
     private void adopt(String app) {
         saveProgress(false); requestPlaying(false); generation++; station=null; advanceAfterRefill=false;
         player.stop(); player.clearMediaItems(); tracks.clear(); revision++; error=""; failure=null;
-        owner=app; skipBack=skipForward=0; lastIndex=-1; lastDurationMs=0; applyOwner();
+        owner=app; skipBack=skipForward=0; lastIndex=-1; lastDurationMs=0; player.setPlaybackSpeed(1f); applyOwner();
         Log.i("WizardAudio","owner "+app+" session="+sessionId);
     }
     /** Spoken-word apps get their place saved by the player itself, so it keeps saving while the phone is locked. */
@@ -287,7 +287,7 @@ public final class BackgroundAudioService extends MediaSessionService {
         if(!owner.equals(app)) {
             // Another admitted app owns the player: this app sees an idle player it may load into, never the other queue.
             return new JSONObject().put("v",1).put("sessionId",sessionId).put("appId",app).put("index",-1).put("playing",false)
-                .put("wantPlaying",false).put("buffering",false).put("positionMs",0).put("durationMs",0).put("volume",player.getVolume())
+                .put("wantPlaying",false).put("buffering",false).put("positionMs",0).put("durationMs",0).put("volume",player.getVolume()).put("rate",1)
                 .put("error","").put("station",JSONObject.NULL).put("queueRevision",-1).put("generation",generation)
                 .put("reporter","native").put("queue",new JSONArray());
         }
@@ -295,7 +295,7 @@ public final class BackgroundAudioService extends MediaSessionService {
             .put("index",tracks.isEmpty() ? -1 : player.getCurrentMediaItemIndex()).put("playing",player.isPlaying())
             .put("wantPlaying",userWant).put("buffering",player.getPlaybackState() == Player.STATE_BUFFERING)
             .put("positionMs",Math.max(0,player.getCurrentPosition())).put("durationMs",player.getDuration() == C.TIME_UNSET ? 0 : player.getDuration())
-            .put("volume",player.getVolume()).put("error",error).put("station",station == null ? JSONObject.NULL : station)
+            .put("volume",player.getVolume()).put("rate",(double)player.getPlaybackParameters().speed).put("error",error).put("station",station == null ? JSONObject.NULL : station)
             .put("queueRevision",revision).put("generation",generation).put("reporter","native");
         if (known != revision) o.put("queue",new JSONArray(tracks));
         return o;
@@ -337,6 +337,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 JSONObject skip = p.optJSONObject("skip");
                 long back = skip == null ? 0 : AudioPolicy.skipMs(skip.optDouble("back",0)), fwd = skip == null ? 0 : AudioPolicy.skipMs(skip.optDouble("forward",0));
                 if (back != skipBack || fwd != skipForward) { skipBack = back; skipForward = fwd; applyOwner(); }
+                if (p.has("rate")) player.setPlaybackSpeed(AudioPolicy.rate(p.optDouble("rate",1)));
                 int at = player.getMediaItemCount() == 0 ? -1 : player.getCurrentMediaItemIndex();
                 List<JSONObject> history = at < 0 ? new ArrayList<>() : new ArrayList<>(tracks.subList(Math.max(0,at+1-50),at+1));
                 for (int i=history.size()-1;i>=0;i--) items.add(0,item(history.get(i)));
@@ -368,6 +369,7 @@ public final class BackgroundAudioService extends MediaSessionService {
                 for(int i=tracks.size()-1;i>player.getCurrentMediaItemIndex();i--) if(drop.contains(tracks.get(i).optString("id"))) { tracks.remove(i); player.removeMediaItem(i); revision++; }
                 maybeRefill(); break;
             }
+            case "rate": player.setPlaybackSpeed(AudioPolicy.rate(p.optDouble("value",1))); break;
             case "volume": player.setVolume((float)Math.max(0,Math.min(1,p.optDouble("value",1)))); break;
             case "stop": requestPlaying(false); generation++; station=null; player.stop(); player.clearMediaItems(); tracks.clear(); revision++; break;
             case "attach": case "state": case "detach": break;

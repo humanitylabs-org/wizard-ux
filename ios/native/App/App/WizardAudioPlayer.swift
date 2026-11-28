@@ -119,7 +119,7 @@ final class WizardAudioBridge: NSObject, WKScriptMessageHandler {
         }
         if method == "capabilities" {
             answer(String(id), ["v": 1, "backgroundAudio": true, "methods": WizardAudioPolicy.methods.sorted(),
-                                "apps": WizardAudioPolicy.apps.sorted(), "skip": true, "platform": "ios"], nil)
+                                "apps": WizardAudioPolicy.apps.sorted(), "skip": true, "rate": true, "platform": "ios"], nil)
             return
         }
         // The stream, artwork and progress requests carry this Wizard's login cookies, read fresh from the web view.
@@ -190,6 +190,8 @@ final class WizardAudioPlayer: NSObject {
     private var refillKey = UUID().uuidString
     private var controls = WizardAudioPolicy.controls(back: nil, forward: nil)
     private var volume: Float = 1
+    /// The owner app's playback speed (wizard-ux issue 2061); it carries to the next episode and resets when another app takes over.
+    private var playbackRate: Float = 1
     private var artwork: (url: String, art: MPMediaItemArtwork)?
     private var progressTimer: Timer?
     private var itemObservations: [NSKeyValueObservation] = []
@@ -231,7 +233,8 @@ final class WizardAudioPlayer: NSObject {
         if !origin.isEmpty {
             requestPlaying(false); generation += 1; station = nil; advanceAfterRefill = false
             player.replaceCurrentItem(with: nil); tracks.removeAll(); index = -1; revision += 1; error = ""
-            owner = WizardAudioPolicy.music; controls = WizardAudioPolicy.controls(back: nil, forward: nil); applyOwner(); artwork = nil; nowPlaying()
+            owner = WizardAudioPolicy.music; controls = WizardAudioPolicy.controls(back: nil, forward: nil); applyOwner(); artwork = nil
+            playbackRate = 1; player.defaultRate = 1; nowPlaying()
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
         origin = new
@@ -278,6 +281,7 @@ final class WizardAudioPlayer: NSObject {
             while i > index { if drop.contains(tracks[i]["id"] as? String ?? "") { tracks.remove(at: i); revision += 1 }; i -= 1 }
             maybeRefill()
         case "volume": volume = Float(max(0, min(1, number(p["value"], 1)))); player.volume = volume
+        case "rate": setRate(WizardAudioPolicy.rate((p["value"] as? NSNumber)?.doubleValue))
         case "stop":
             saveProgress(completed: false)
             requestPlaying(false); generation += 1; station = nil; tracks.removeAll(); index = -1; revision += 1
@@ -300,6 +304,7 @@ final class WizardAudioPlayer: NSObject {
         let skip = p["skip"] as? [String: Any]
         controls = WizardAudioPolicy.controls(back: (skip?["back"] as? NSNumber)?.doubleValue, forward: (skip?["forward"] as? NSNumber)?.doubleValue)
         applyOwner()
+        if let r = p["rate"] as? NSNumber { playbackRate = WizardAudioPolicy.rate(r.doubleValue); player.defaultRate = playbackRate }
         let lo = max(0, index + 1 - 50), hi = min(index, tracks.count - 1)
         let history = index < 0 || lo > hi ? [] : Array(tracks[lo...hi])
         let at = max(0, min(q.count - 1, Int(number(p["index"])))) + history.count
@@ -332,19 +337,20 @@ final class WizardAudioPlayer: NSObject {
         generation += 1; station = nil; advanceAfterRefill = false
         player.replaceCurrentItem(with: nil); tracks.removeAll(); index = -1; revision += 1; error = ""
         owner = app; controls = WizardAudioPolicy.controls(back: nil, forward: nil); applyOwner()
+        playbackRate = 1; player.defaultRate = 1
     }
 
     func snapshot(app: String, known: Int) -> [String: Any] {
         if owner != app {
             // Another admitted app owns the player: this app sees an idle player it may load into, never the other queue.
             return ["v": 1, "sessionId": sessionId, "appId": app, "index": -1, "playing": false, "wantPlaying": false,
-                    "buffering": false, "positionMs": 0, "durationMs": 0, "volume": volume, "error": "", "station": NSNull(),
+                    "buffering": false, "positionMs": 0, "durationMs": 0, "volume": volume, "rate": 1, "error": "", "station": NSNull(),
                     "queueRevision": -1, "generation": generation, "reporter": "native", "queue": []]
         }
         var o: [String: Any] = ["v": 1, "sessionId": sessionId, "appId": owner, "index": tracks.isEmpty ? -1 : index,
                                 "playing": player.timeControlStatus == .playing, "wantPlaying": userWant,
                                 "buffering": player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
-                                "positionMs": Int(position * 1000), "durationMs": Int(duration * 1000), "volume": volume,
+                                "positionMs": Int(position * 1000), "durationMs": Int(duration * 1000), "volume": volume, "rate": playbackRate,
                                 "error": error, "station": station ?? NSNull(), "queueRevision": revision, "generation": generation,
                                 "reporter": "native"]
         if known != revision { o["queue"] = tracks }
@@ -380,10 +386,19 @@ final class WizardAudioPlayer: NSObject {
             try? session.setCategory(.playback, mode: WizardAudioPolicy.sessionMode(owner) == "spokenAudio" ? .spokenAudio : .default, options: [])
             try? session.setActive(true)
             if player.currentItem == nil, index >= 0, index < tracks.count { start(at: index, positionMs: 0) }
+            player.defaultRate = playbackRate
             player.play()
+            if player.rate != playbackRate { player.rate = playbackRate }
         } else {
             player.pause()
         }
+        nowPlaying()
+    }
+
+    /// A new speed applies at once while playing; paused, it waits for the next play (setting `rate` would start playback).
+    private func setRate(_ r: Float) {
+        playbackRate = r; player.defaultRate = r
+        if userWant, player.timeControlStatus != .paused { player.rate = r }
         nowPlaying()
     }
 
@@ -507,8 +522,8 @@ final class WizardAudioPlayer: NSObject {
             MPMediaItemPropertyArtist: text.artist,
             MPMediaItemPropertyAlbumTitle: text.album,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
-            MPNowPlayingInfoPropertyPlaybackRate: player.timeControlStatus == .playing ? 1.0 : 0.0,
-            MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0,
+            MPNowPlayingInfoPropertyPlaybackRate: player.timeControlStatus == .playing ? Double(playbackRate) : 0.0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: Double(playbackRate),
             MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
             MPNowPlayingInfoPropertyPlaybackQueueIndex: index,
             MPNowPlayingInfoPropertyPlaybackQueueCount: tracks.count,

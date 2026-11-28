@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const TYPE = 'wizard:background-audio:v1', pending = new Map(), states = new Map();
-  const METHODS = new Set(['capabilities','attach','state','load','play','pause','seek','next','previous','jump','enqueueNext','removeCurrent','removeUpcoming','volume','detach','stop']);
+  const METHODS = new Set(['capabilities','attach','state','load','play','pause','seek','next','previous','jump','enqueueNext','removeCurrent','removeUpcoming','volume','rate','detach','stop']);
   let registry = () => ({}), admit = () => false, seq = 0, boundPort, owner = null;
   const granted = (id, app) => !!app && (app.provides?.includes('background-audio') || window.WizBackgroundAudioLegacy?.granted(id, app))
     && window.WizBackgroundAudioLegacy?.admitted?.(id) !== false;
