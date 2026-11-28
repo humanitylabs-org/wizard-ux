@@ -168,7 +168,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Calm offline card**: The can't-reach-your-Wizard card shows one dotted path (Internet · Tailscale · Wizard), one short next step and a small Check again with the automatic re-check time.
 - **Catch me up clears Sent**: Catch me up clears finished Sent chats, any age.
 - **Chat replies as Chats notifications**: Android app: your agent's chat replies reach the phone as Notifications items under Chats; tap opens the chat.
-- **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
@@ -195,6 +194,7 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
+- **Get set up list in Setup**: on for everyone: Setup lists optional accounts to connect.
 - **Reply buttons**: on for everyone: a tap answers.
 - **Five-choice first chat**: on for everyone: a first chat opens with five choices to tap.
 - **Backup health in Resources**: on for everyone: Home › Resources › Health.

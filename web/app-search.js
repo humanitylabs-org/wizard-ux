@@ -122,7 +122,6 @@ window.WizCore.appParts.search = function ({ APP, appAt, appVars, blank, CHATS, 
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });
   function openApp(a, extra = {}, opts = {}) {
     if (!a) return false;
-    if (a.id === 'setup' && window.WosWelcome && window.WosWelcome.takesSetup !== false) { openingEnd(a.id); closeSheets(true); window.WosWelcome.open(); return true; } // Setup is the Welcome modal now
     if (a.id === 'pages') { closeSheets(true); placeApp(w => w.app === 'pages' && !w.from, {app:'pages', appId:'pages'}, opts); return true; }
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
     const pageSlug = a.url && window.WosPages?.match(a.url);

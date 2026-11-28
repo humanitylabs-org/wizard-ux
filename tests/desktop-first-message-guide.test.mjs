@@ -140,9 +140,9 @@ function openSetup(shell) {
   const marker = shell === 'desktop' ? '  function openApp(a, opts = {}) {' : '  function openApp(a, extra = {}, opts = {}) {';
   const welcome = [];
   const ctx = runRecording(block(read(file), marker) + '\nglobalThis.open = openApp;', { window: { WosWelcome: { open: () => welcome.push('open') } } });
-  return { r: ctx.open({ id: 'setup', name: 'Setup' }), welcome, calls: ctx.calls };
+  return { r: ctx.open({ id: 'setup', name: 'Setup', url: '/wizard-os-home/setup/' }), welcome, calls: ctx.calls };
 }
-test('both shells boot the Welcome modal and open it for the Setup app', async () => {
+test('both shells boot the Welcome modal; the Setup app opens the Setup page, not the Welcome', async () => {
   for (const shell of ['desktop', 'phone']) {
     const w = welcomeBoot(shell);
     assert.equal(typeof w.opts?.send, 'function', shell + ': boot hands Welcome a send');
@@ -151,8 +151,9 @@ test('both shells boot the Welcome modal and open it for the Setup app', async (
     assert.equal(it.sessionId, 's1'); assert.deepEqual(JSON.parse(JSON.stringify(w.sent)), [['w1', 'hello']], shell + ': the first message goes to the main Chats window');
     assert.deepEqual(w.opened, ['s1'], shell + ': its new thread opens');
     const o = openSetup(shell);
-    assert.equal(o.r, true); assert.deepEqual(o.welcome, ['open'], shell + ': the Setup app opens the Welcome modal');
-    assert.ok(!o.calls.some(c => c[0] === 'newWin' || c[0] === 'placeApp'), shell + ': no Setup window');
+    // Get set up (wizard-ux issue 1837, on for everyone): the Setup tile opens Setup's own page (its Get set up list).
+    assert.deepEqual(o.welcome, [], shell + ': the Setup app does not open the Welcome modal');
+    assert.equal(o.r, true); assert.ok(o.calls.some(c => c[0] === 'newWin' || c[0] === 'placeApp'), shell + ': a Setup window opens');
   }
   assert.ok(!pageAssets('desktop.html').srcs.includes('core/pwa-install.js'));
 });

@@ -1,4 +1,4 @@
-// Get set up (wizard-ux issue 1837, switch wizard/get-set-up): Setup's optional list of accounts to connect. Runs the
+// Get set up (wizard-ux issue 1837, on for everyone): Setup's optional list of accounts to connect. Runs the
 // real Setup page (web/setup/setup.js + get-set-up.js + phone-connect.js) in a shell frame against a fake box.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,9 +6,9 @@ import { setupApp, tick } from './fixtures/r7A-setup-harness.mjs';
 
 const ORIGIN = 'https://wizard.example.test';
 const SETUP = { first_run: false, items: [{ id: 'phone', state: 'todo' }] };
-function shell(tweaks) {
-  const shell = { messages: [], opened: [], tweaks,
-    document: { documentElement: { getAttribute: k => (k === 'data-tweaks' ? shell.tweaks : null), dataset: {} } },
+function shell() {
+  const shell = { messages: [], opened: [],
+    document: { documentElement: { getAttribute: () => null, dataset: {} } },
     postMessage: (m, o) => shell.messages.push([JSON.parse(JSON.stringify(m)), o]),
     WizOpenApp: (id, path) => { shell.opened.push([id, path]); return true; } };
   return shell;
@@ -38,9 +38,9 @@ function box({ apps = true } = {}) {
 const rows = list => [...list.querySelectorAll('[data-gsu]')].map(b => [b.getAttribute('data-gsu'), b.getAttribute('data-state'),
   ['b', 'small', '.gsu-state'].map(sel => b.querySelector(sel).textContent).join(' | ')]);
 
-// owner-facing: the decider sees this list in Setup once the switch is on.
-test('switch on: Get set up sits right after the phone row, five rows, connected ones show Done', async () => {
-  const sh = shell('wizard/desktop-chats wizard/get-set-up'), b = box();
+// owner-facing: every owner sees this list in Setup, with no switch to turn on.
+test('Get set up sits right after the phone row, five rows, connected ones show Done', async () => {
+  const sh = shell(), b = box();
   const s = await setupApp({ setup: SETUP, getSetUp: { parent: sh, box: b.reply } });
   await tick(12);
   const html = s.list.innerHTML;
@@ -59,7 +59,7 @@ test('switch on: Get set up sits right after the phone row, five rows, connected
 });
 
 test('tap: an installed app opens itself; one not installed opens its Store page, which opens it once installed', async () => {
-  const sh = shell('wizard/get-set-up'), b = box();
+  const sh = shell(), b = box();
   const s = await setupApp({ setup: SETUP, getSetUp: { parent: sh, box: b.reply } });
   await tick(12);
   await s.tap('[data-gsu="messenger"]');
@@ -70,7 +70,7 @@ test('tap: an installed app opens itself; one not installed opens its Store page
 });
 
 test('a connection made in the app shows Done the next time Setup comes back into view', async () => {
-  const sh = shell('wizard/get-set-up'), b = box();
+  const sh = shell(), b = box();
   let linked = false;
   const reply = (url, o) => (url.endsWith('/messenger/api/unified/connectors') ? [200, { providers: [{ state: linked ? 'connected' : 'not_configured', logins: [] }] }] : b.reply(url, o));
   const s = await setupApp({ setup: SETUP, getSetUp: { parent: sh, box: reply } });
@@ -82,18 +82,16 @@ test('a connection made in the app shows Done the next time Setup comes back int
   assert.equal(s.list.querySelector('[data-gsu="messenger"]').getAttribute('data-state'), 'done');
 });
 
-test('switch off: Setup is unchanged and reads nothing of the apps', async () => {
-  const sh = shell('wizard/desktop-chats'), b = box();
+test('no switch: a shell with no tweaks at all still shows the list', async () => {
+  const sh = shell(), b = box();
   const s = await setupApp({ setup: SETUP, getSetUp: { parent: sh, box: b.reply } });
   await tick(12);
-  assert.doesNotMatch(s.list.innerHTML, /Get set up|data-gsu/);
-  assert.deepEqual(b.seen.filter(([u]) => u !== '/wizard/v1/bootstrap'), []); // Setup's own owner-name read stays
-  const plain = await setupApp({ setup: SETUP });
-  assert.equal(s.list.innerHTML, plain.list.innerHTML);
+  assert.equal(s.list.querySelectorAll('[data-gsu]').length, 5);
+  assert.ok(b.seen.some(([u]) => u === '/wizard/v1/apps'));
 });
 
 test('a box that cannot list its apps still shows the rows, none Done, and says it can’t check', async () => {
-  const sh = shell('wizard/get-set-up'), b = box({ apps: false });
+  const sh = shell(), b = box({ apps: false });
   const s = await setupApp({ setup: SETUP, getSetUp: { parent: sh, box: b.reply } });
   await tick(12);
   assert.deepEqual(rows(s.list).map(r => r[1]), ['todo', 'todo', 'todo', 'todo', 'todo']);

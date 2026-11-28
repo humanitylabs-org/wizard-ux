@@ -1,5 +1,5 @@
-// Bring your AI (wizard-ux #898): the Welcome's optional step before Say hello, only on a Wizard with the Importer app.
-// It embeds the Importer's own screen (one Importer, two ways in) and never imports anything itself. Runs the real
+// Bring your AI (wizard-ux #898) left the first run with Get set up (wizard-ux issue 1837, on for everyone): bringing
+// what your old AI knows is a row on Setup's optional list, so the Welcome never asks for it, Importer or not. Runs the real
 // web/core/welcome.js and web/core/config.js against a fake Agent Service (harness from welcome-name.test.mjs).
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -78,59 +78,23 @@ test('without the Importer app the Welcome is unchanged: Pick a skin, then Say h
   assert.doesNotMatch(d.html(), /Bring your AI/)
 })
 
-test('with the Importer app: Pick a skin, then the optional Bring your AI step, then Say hello', async () => {
+// owner-facing: Get set up (wizard-ux issue 1837) moves the import out of the first run, for everyone.
+test('with the Importer app the import is not a first-run step: AI sign-in, skin, then Say hello', async () => {
   const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
-  await d.boot(IMPORTER)
-  const dots = h => (h.match(/class="wl-dots"[^]*?<\/div>/)[0].match(/<i /g) || []).length
-  assert.equal(dots(d.html()), 4) // AI, skin, bring, hello
-  d.press('next')
-  assert.match(d.html(), /<h2 tabindex="-1">Bring your AI<\/h2><p>Optional\./)
-  assert.match(d.html(), /data-wl="bring">Bring my AI</)
-  assert.match(d.html(), /data-wl="next">Not now</)
-  d.press('next') // Not now
-  assert.match(d.html(), /Say hello/)
-})
-
-test('Bring my AI embeds the Importer screen; Back peels it, then steps back to the skins', async () => {
-  const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
-  await d.boot(IMPORTER)
-  d.press('next'); d.press('bring')
-  assert.match(d.html(), /<div class="wl-frame wl-embed"><iframe src="https:\/\/box\.test\/importer\/\?embedded=1" allow="geolocation 'none'" title="Importer"><\/iframe><\/div>/)
-  assert.match(d.html(), /data-wl="next">Continue</)
-  assert.equal(d.W.back(), 'welcome')
-  assert.match(d.html(), /Bring my AI/) // frame closed, still on the step
-  assert.equal(d.W.back(), 'welcome')
-  assert.match(d.html(), /Pick a skin/)
-  d.press('next'); d.press('bring'); d.press('back') // the on-screen ‹ does the same as Back
-  assert.match(d.html(), /Bring my AI/)
-  d.press('bring'); d.press('next') // Continue from inside the Importer
-  assert.match(d.html(), /Say hello/)
-  assert.equal(d.W.back(), 'welcome')
-  assert.match(d.html(), /Bring my AI/) // Back from Say hello returns to Bring your AI
-})
-
-// owner-facing: Get set up (wizard-ux issue 1837, switch wizard/get-set-up) moves the import out of the first run.
-test('Get set up switch on: the Importer is not a first-run step; AI sign-in, skin, then Say hello', async () => {
-  const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
-  d.ctx.document.documentElement.getAttribute = k => (k === 'data-tweaks' ? 'wizard/desktop-chats wizard/get-set-up' : null)
   await d.boot(IMPORTER)
   const dots = h => (h.match(/class="wl-dots"[^]*?<\/div>/)[0].match(/<i /g) || []).length
   assert.equal(dots(d.html()), 3) // AI, skin, hello
   d.press('next')
   assert.match(d.html(), /Say hello/)
-  assert.doesNotMatch(d.html(), /Bring your AI/)
+  assert.doesNotMatch(d.html(), /Bring your AI|Bring my AI/)
+  assert.equal(d.W.back(), 'welcome')
+  assert.match(d.html(), /Pick a skin/) // Back from Say hello returns to the skins
 })
 
-test('Get set up switch off: the Bring your AI step stays as it is', async () => {
+test('opening the Welcome at the old Bring your AI step shows Say hello, never the Importer', async () => {
   const d = withSkins(device(fakeBox({ name: 'Ana', authenticated: true })))
-  d.ctx.document.documentElement.getAttribute = k => (k === 'data-tweaks' ? 'wizard/desktop-chats' : null)
   await d.boot(IMPORTER)
-  d.press('next')
-  assert.match(d.html(), /Bring my AI/)
-})
-
-test('the step only opens the Importer: no import call from the Welcome', () => {
-  const js = readFileSync(new URL('../web/core/welcome.js', import.meta.url), 'utf8')
-  const step = js.slice(js.indexOf('function paintBring'), js.indexOf('function paintHello'))
-  assert.doesNotMatch(step, /fetch\(|bring-data|api\//)
+  d.W.close(); d.W.open('bring')
+  assert.doesNotMatch(d.html(), /Bring your AI|Importer|<iframe/)
+  assert.match(d.html(), /Say hello/)
 })
