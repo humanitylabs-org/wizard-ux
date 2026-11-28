@@ -212,7 +212,7 @@ No longer switches (owners and old chats may still name them):
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
 - **One UI icon count**: on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner.
-- **Instant home-screen apps**: on for everyone, nothing to turn on: in the Android app, a home-screen app icon opens at once on the app's last screen (or its icon and name the first time), skips Connecting when Wizard answered in the last few minutes, and keeps the app's files on the phone, so a second open only asks the box whether the app changed.
+- **Instant home-screen apps**: on for everyone: Android home-screen app icons open at once on their last screen, without Connecting.
 
 ## How do I…
 
