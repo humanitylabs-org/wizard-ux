@@ -175,7 +175,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
-- **Install sheet recommends private AI**: Installing a personal-data app suggests private AI.
 - **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
@@ -203,6 +202,7 @@ Switches that are ordinary settings or views, not tester switches:
 
 No longer switches (owners and old chats may still name them):
 - **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
+- **Install sheet recommends private AI**: on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.
 - **Agent access under the browser boundary**: on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.
 - **Channels in Chats**: on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.
 - **Thread tracker**: retired: Needs you now shows in the thread itself, on the reply that needs the owner (with Mark done), and in Inbox; Reply works on any message.
