@@ -175,7 +175,6 @@ Settings › Appearance › Try new features lists unfinished features to try, A
 - **Get set up list in Setup**: Setup lists optional accounts to connect.
 - **Inbox: pin threads to the top**: Pin threads on top.
 - **Install apps your agent builds**: Apps I build install with one tap.
-- **Instant home-screen apps**: Android: pinned app icons open at once on their last screen.
 - **Instant phone notifications**: Android app, with Phone notifications per app on: app notifications reach the phone within seconds, even locked (one Tailscale connection, no Google).
 - **Machines on Home**: Home shows a slim strip (Wizard, AI fuel, chats, backup, network); Settings › System holds your network, AI, security and storage.
 - **New chat quick links**: A new chat shows Catch me up, What's waiting on me and Plan my day above the message box; one tap sends it.
@@ -213,6 +212,7 @@ No longer switches (owners and old chats may still name them):
 - **Reply to Telegram and Slack chats**: on for everyone: reply in Chats to a chat started on Telegram or Slack; it goes through that app's own connection and shows there too.
 - **Models from your connectors**: removed: the model menu in Chats lists the models of every AI connection you connected.
 - **One UI icon count**: on for everyone, nothing to turn on: in the Android app, the Messenger home-screen icon, its widget and the Unread notification show the exact unread count (up to 999, then 999+) in a One UI-style orange-red badge at the icon's top-right corner.
+- **Instant home-screen apps**: on for everyone, nothing to turn on: in the Android app, a home-screen app icon opens at once on the app's last screen (or its icon and name the first time), skips Connecting when Wizard answered in the last few minutes, and keeps the app's files on the phone, so a second open only asks the box whether the app changed.
 
 ## How do I…
 
