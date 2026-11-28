@@ -136,4 +136,37 @@ public class ReachPolicyTest {
         assertEquals(300, offlineAt(Why.NO_NETWORK, new long[]{ 300 }, 1_800));
         assertFalse("the offline screen's own retries keep it up", ReachPolicy.retryQuietly(Why.NOT_ANSWERING, 300, true));
     }
+
+    /** Wizard-ux issue 2054: the shell already painted, Tailscale switched off: the guide comes at once. */
+    @Test
+    public void tailscaleOffUnderAPaintedPageAsksAtOnce() {
+        // Painted, nothing on screen, Wi-Fi up, no VPN, a Tailscale address: check now.
+        assertTrue(ReachPolicy.checkUnderPage(true, false, true, false, true));
+        // Tailscale on and connected never asks (issue 2008).
+        assertFalse(ReachPolicy.checkUnderPage(true, false, true, true, true));
+        // No network is the page's own offline story; an address off Tailscale never needs it.
+        assertFalse(ReachPolicy.checkUnderPage(true, false, false, false, true));
+        assertFalse(ReachPolicy.checkUnderPage(true, false, true, false, false));
+        // A load under way (nothing painted yet) or a screen already up: the load's own marks handle it.
+        assertFalse(ReachPolicy.checkUnderPage(false, false, true, false, true));
+        assertFalse(ReachPolicy.checkUnderPage(true, true, true, false, true));
+    }
+
+    @Test
+    public void guideUnderAPaintedPageOnlyWhenTheBoxDoesNotAnswer() {
+        assertTrue(ReachPolicy.tailscaleOffUnderPage(-1, Why.TAILSCALE_OFF));   // name doesn't resolve without Tailscale
+        assertTrue(ReachPolicy.tailscaleOffUnderPage(502, Why.TAILSCALE_OFF));
+        assertFalse(ReachPolicy.tailscaleOffUnderPage(200, Why.TAILSCALE_OFF)); // Funnel or another route still answers
+        assertFalse(ReachPolicy.tailscaleOffUnderPage(401, Why.TAILSCALE_OFF));
+        assertFalse(ReachPolicy.tailscaleOffUnderPage(-1, Why.NOT_ANSWERING));  // Tailscale came back meanwhile
+        assertFalse(ReachPolicy.tailscaleOffUnderPage(-1, Why.NO_NETWORK));
+    }
+
+    @Test
+    public void guideStaysOverACachedPaintWhileTailscaleIsOff() {
+        assertTrue(ReachPolicy.keepOnPaint(true, Why.TAILSCALE_OFF, Why.TAILSCALE_OFF));
+        assertFalse(ReachPolicy.keepOnPaint(true, Why.TAILSCALE_OFF, Why.NOT_ANSWERING)); // Tailscale back: the paint wins
+        assertFalse(ReachPolicy.keepOnPaint(true, Why.NOT_ANSWERING, Why.NOT_ANSWERING));
+        assertFalse(ReachPolicy.keepOnPaint(false, null, Why.TAILSCALE_OFF));            // Connecting only: leaves as before
+    }
 }

@@ -950,6 +950,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (now != null && url.contains("#") && noFragment(url).equals(noFragment(now))) return; // same page, a #hop
         mainFailed = false;
         wantUrl = url;
+        pagePainted = false;
         pinPageShown = false;
         pinLanded = false;
         pinPageAt = 0;
@@ -973,6 +974,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         PinInstant.reached(this);
         reachWatch++;
         pinLanded = true;
+        pagePainted = true;
+        // Wizard-ux issue 2054: a page that paints with Tailscale off (the shell from its cache) still gets the guide:
+        // one already up stays up (no flash every retry) until the box answers or Tailscale is back.
+        boolean keepGuide = reach != null && ReachPolicy.keepOnPaint(reach.isOffline(), reach.shown(), ReachScreen.why(this));
+        main.removeCallbacks(tailnetCheck);
+        main.postDelayed(tailnetCheck, keepGuide ? 0 : ReachPolicy.NET_SETTLE_MS);
         // wizard-ux issue 1959: the box answered and the pinned page has painted, so the cover (placeholder or last
         // screen) leaves at most COVER_AFTER_PAGE_MS from now, whether or not the app ever says it has loaded.
         if (pinPageAt == 0) {
@@ -984,6 +991,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         main.removeCallbacks(reachRetry);
         main.removeCallbacks(quietRetry);
         quietPending = false;
+        if (keepGuide) {
+            // The guide's own retries go on (a route that answers later still opens the Wizard).
+            android.util.Log.i("WizardOSReach", "painted " + pageUrl + " with Tailscale off: guide stays");
+            if (resumed) main.postDelayed(reachRetry, ReachPolicy.RETRY_MS);
+            return;
+        }
         if (reach != null && reach.isShowing()) android.util.Log.i("WizardOSReach", "reached " + pageUrl);
         if (reach != null) reach.hide();
     }
@@ -1295,16 +1308,55 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     };
 
     void netChanged() {
+        tailnetAsk++; // wizard-ux issue 2054: a health answer from before this change no longer speaks for the screen
         // Wizard-ux issue 2008: a quiet try is waiting and the network changed (the Tailscale tunnel came up): try now.
         if (reach != null && !reach.isOffline() && mainFailed && quietPending) {
             main.removeCallbacks(quietRetry); // still pending: it runs once the burst settles
             main.postDelayed(quietRetry, ReachPolicy.NET_SETTLE_MS);
             return;
         }
+        if (reach != null && !reach.isShowing()) {
+            // Wizard-ux issue 2054: Tailscale went off under a page that already painted: check once the burst settles.
+            main.removeCallbacks(tailnetCheck);
+            main.postDelayed(tailnetCheck, ReachPolicy.NET_SETTLE_MS);
+            return;
+        }
         if (reach == null || !reach.isOffline()) return;
         main.removeCallbacks(netSettled);
         main.postDelayed(netSettled, ReachPolicy.NET_SETTLE_MS);
     }
+
+    /** A page has painted since the last main-frame load began (wizard-ux issue 2054). */
+    private boolean pagePainted;
+    /** Bumped by every check below, so a late health answer only acts for the latest one. */
+    private int tailnetAsk;
+
+    /** Wizard-ux issue 2054: with the shell already painted, Tailscale off left only the page's own "Can't reach Wizard"
+     *  pill and a Troubleshooter that can't work without Tailscale; this screen, the only part that sees Tailscale is
+     *  off, never ran because no page load failed. Now: a network, a Tailscale address and no VPN under a painted page
+     *  asks the box's health check once; no answer and Tailscale still off shows the Tailscale guide at once. */
+    private final Runnable tailnetCheck = () -> {
+        if (reach == null || web == null || !resumed || isFinishing() || isDestroyed()) return;
+        String origin = ai.wizards.os.device.AppState.origin(this);
+        boolean[] n = ReachScreen.net(this);
+        final boolean guideUp = ReachPolicy.keepOnPaint(reach.isOffline(), reach.shown(), ReachScreen.why(this));
+        if (!ReachPolicy.checkUnderPage(pagePainted, reach.isShowing() && !guideUp, n[0], n[1], ServerOrigin.needsTailscale(origin))) return;
+        final int ask = ++tailnetAsk;
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> {
+            int status = PinInstant.health(app);
+            main.post(() -> {
+                if (ask != tailnetAsk || reach == null || !pagePainted || isFinishing() || isDestroyed()) return;
+                ReachPolicy.Why now = ReachScreen.why(this);
+                android.util.Log.i("WizardOSReach", "under page: " + now + " health " + status);
+                boolean off = ReachPolicy.tailscaleOffUnderPage(status, now);
+                if (off && !reach.isShowing() && resumed) showOffline(null);
+                // The guide kept over a painted page leaves once the box answers after all (Funnel, another route).
+                else if (guideUp && PinInstantPolicy.boxAnswers(status) && reach.isOffline() && reach.shown() == ReachPolicy.Why.TAILSCALE_OFF
+                        && now != ReachPolicy.Why.NO_NETWORK) reach.hide();
+            });
+        }, "reach-tailnet-check").start();
+    };
 
     /* ---------------- Microphone for the orb ---------------- */
 
@@ -1512,6 +1564,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         ai.wizards.os.downloads.Downloads.addListener(downloadsListener);
         queueDownloadPush(ai.wizards.os.downloads.DownloadsPolicy.eventJson("sync", null)); // a download may have finished while away
         if (reach != null && reach.isOffline()) main.postDelayed(this::retryReach, 300); // back from Tailscale: try now
+        else if (reach != null) { main.removeCallbacks(tailnetCheck); main.postDelayed(tailnetCheck, 300); } // wizard-ux issue 2054: Tailscale turned off while away
         if (mizel != null) mizel.setPcmForeground(true);
         if (everywhereSetup) {
             everywhereSetup = false;
