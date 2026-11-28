@@ -162,7 +162,7 @@ html.wz-hosted .release-label select { background: var(--wz-surface-raised, #211
 .pv-card { margin: 0 0 16px; padding: 14px 16px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--ink-2) 30%, transparent); background: color-mix(in srgb, var(--ink-2) 6%, transparent); }
 .pv-card h3 { margin: 0 0 6px; font-size: 16px; }
 .pv-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-/* The private AI card (issue 1802, switch wizard/private-ai-nudge; markup: store-private-nudge.js). Wizard tokens. */
+/* The private AI card (issue 1802; markup: store-private-nudge.js). Wizard tokens. */
 .pn-card { border-color: color-mix(in srgb, var(--wz-accent, var(--violet)) 40%, transparent); background: color-mix(in srgb, var(--wz-accent, var(--violet)) 8%, transparent); }
 .pn-card .mc-lede { margin: 0 0 12px; line-height: 1.45; color: var(--wz-text, inherit); }
 .pn-acts { justify-content: flex-start; }
