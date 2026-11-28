@@ -7,8 +7,8 @@ No live feed writes. The Thales path publishes draft-only.
 
 `ci` is the CI path (.github/workflows/phone-release.yml, ux#1400): the same metadata checks on an APK
 a Linux runner built and signed from main, then (with --publish) the shared android-v<version> release.
-With --prerelease (release lanes on, wizard-os#720) it is a tester build: a GitHub prerelease that boxes never
-mirror. `promote` (.github/workflows/phone-promote.yml, every 6h) makes the newest tester build that soaked 72h, while no
+Every CI release is a tester build (release lanes, wizard-os#720, on for everyone): a GitHub prerelease that boxes
+never mirror. `promote` (.github/workflows/phone-promote.yml, every 6h) makes the newest tester build that soaked 72h, while no
 release-blocker issue is open, the latest release, with the same bytes and no rebuild. No person approves it.
 """
 import argparse
@@ -204,7 +204,7 @@ def collect(args):
     print(json.dumps(phone, indent=2))
 
 
-def draft(output, phone, publish=False, prerelease=False):
+def draft(output, phone, publish=False):
     tag = 'android-v' + phone['versionName']
     apk = output / f'wizard-os-{phone["versionName"]}.apk'
     require(digest(apk) == phone['sha256'], 'Draft APK mismatch')
@@ -224,11 +224,10 @@ def draft(output, phone, publish=False, prerelease=False):
     if publish:
         # A tester build (release lanes, wizard-os#720) is a prerelease and never "latest", so boxes ignore it
         # until the release train promotes it after its soak (promote below).
-        lane = ['--prerelease', '--latest=false'] if prerelease else ['--latest']
-        run(['gh', 'release', 'edit', tag, '--repo', REPO, '--draft=false'] + lane)
+        run(['gh', 'release', 'edit', tag, '--repo', REPO, '--draft=false', '--prerelease', '--latest=false'])
         state = json.loads(text(['gh', 'release', 'view', tag, '--repo', REPO, '--json', 'url,isDraft,isPrerelease,targetCommitish,assets']))
         require(not state['isDraft'], 'Release publish readback failed')
-        require(bool(state.get('isPrerelease')) == prerelease, 'Release lane readback failed')
+        require(bool(state.get('isPrerelease')), 'Release lane readback failed')
     write_json(output / 'draft-release.json', state)
 
 
@@ -265,7 +264,7 @@ def ci(args):
     (args.output / f'wizard-os-{phone["versionName"]}.apk').write_bytes(apk.read_bytes())
     write_json(args.output / 'phone.json', phone)
     if args.publish:
-        draft(args.output, phone, publish=True, prerelease=getattr(args, 'prerelease', False))
+        draft(args.output, phone, publish=True)
     print(json.dumps(phone, indent=2))
 
 
@@ -406,7 +405,6 @@ def main():
     a.add_argument('--min-box-snapshot', default='0.3.40')
     a.add_argument('--previous-phone', type=Path, help='phone.json of the last published release')
     a.add_argument('--publish', action='store_true')
-    a.add_argument('--prerelease', action='store_true', help='publish as a tester build (release lanes on)')
     a.set_defaults(func=ci)
     a = commands.add_parser('promote')
     a.add_argument('--output', type=Path, required=True)
