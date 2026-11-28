@@ -1,5 +1,5 @@
 'use strict';
-// wizard-ux issue 1989 in a real browser: the phone Apps panel (switch wizard/apps-panel) with other agents and
+// wizard-ux issue 1989 in a real browser: the phone Apps panel (on for everyone) with other agents and
 // connectors installed. A synthetic box with two agents (the main one and Philosopher Agent), two apps and two
 // connectors (wizard.md `type: external`: Claude, ChatGPT). At 412 px, Nebula and Light (obsidian-light), it checks:
 // All apps lists the apps and Philosopher Agent and no connector; search finds the agent and no connector; the star on
@@ -13,7 +13,6 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = 'https://apps-panel-agents.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'apps-panel-agents-evidence');
 const broken = process.env.QA_EXPECT === 'broken';
-const SW = 'wizard/apps-panel';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36';
 const SKINS = (process.env.QA_SKINS || 'nebula,obsidian-light').split(',');
 const APPS = [['notes', 'Notes'], ['wizard-music', 'Music'], ['wizard-claude', 'Claude', 'external'], ['wizard-chatgpt', 'ChatGPT', 'external']]
@@ -28,12 +27,12 @@ async function boot(browser, skin, prefs) {
   const context = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block', userAgent: ANDROID });
   const puts = [];
   await context.routeWebSocket('**/*', w => w.close());
-  await context.addInitScript(({ APPS, SW, skin }) => {
+  await context.addInitScript(({ APPS, skin }) => {
     if (window !== top || sessionStorage.getItem('qa-seeded')) return; sessionStorage.setItem('qa-seeded', '1');
     const seed = { 'wux.apps.v1': JSON.stringify(APPS), 'wos.shell': 'phone', 'wux.shell': 'phone', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.voiceTipSeen': 'true', 'wos.skin': skin,
-      'wos.recent': JSON.stringify(['notes']), 'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { [SW]: true } }) };
+      'wos.recent': JSON.stringify(['notes']) };
     for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v);
-  }, { APPS, SW, skin });
+  }, { APPS, skin });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
     if (u.origin !== origin) return r.abort();

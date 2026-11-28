@@ -42,7 +42,7 @@ window.WizCore.appParts.opening = function ({ closeSheets, openApp, save, store,
     if (!a) return;
     if (isOpening(a.id)) { vib(4); return; }
     const r = store.get('recent', []).filter(x => x !== a.id); r.unshift(a.id); store.set('recent', r.slice(0, 8));
-    window.WizCore.appsPanelOpened?.(a.id); // back on Recent if it was taken off (switch wizard/apps-panel, app-appspanel.js)
+    window.WizCore.appsPanelOpened?.(a.id); // back on Recent if it was taken off (app-appspanel.js)
     openingStart(a, el);
     OPENING.sheet = !!fromSheet;
     // One frame so the pressed, spinning icon paints before any work starts.

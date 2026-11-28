@@ -8,6 +8,8 @@
  *   hold Chats and slide                           the sheet under the finger, letting go on a view opens it,
  *                                                  anywhere else (or back on the tile) changes nothing;
  *   a sideways swipe on the Chats tile             flips between the last two views (nothing with only one so far);
+ *                                                  while Apps is in front it is that bar's step through Recent
+ *                                                  instead (app-appspanel.js, wizard-ux#1955: any tile steps there);
  *   a sideways swipe on the bar or the orb         while Chats is in front: one view along the sheet's order
  *                                                  (Inbox, Sent, Archived, then the tags and agents), stopping at
  *                                                  the ends (app-scrub.js asks `stepper`).
@@ -129,11 +131,18 @@ window.WizCore.appParts.chatsswitch = function ({ $, appVars, CHATS, CHATS_APP, 
       if (it) { csPick(it.dataset.csview); return; }
       csClose(); // let go on nothing, or back on the tile: no change
       // A quick sideways flick that a busy phone saw as a hold (its moves came in after the hold timer): still the flip.
-      if (flick && !lit && Math.abs(dy) < 30 && Date.now() - f.at < 700) csFlip();
+      if (flick && !lit && Math.abs(dy) < 30 && Date.now() - f.at < 700) csSwipe(dx);
       return;
     }
-    if (flick) { csQuiet = Date.now() + 500; csFlip(); }
+    if (flick) { csQuiet = Date.now() + 500; csSwipe(dx); }
   };
+  // The tile's sideways swipe: with Apps in front, one app through Recent like the rest of the bar (left = older,
+  // wizard-ux#1955 "a sideways swipe on any tile"); everywhere else the flip between the last two Chats views.
+  function csSwipe(dx) {
+    const A = window.WizCore.appsPanel;
+    if (P()?.current?.() === 'apps' && A?.stepping?.()) return A.step(dx < 0 ? 1 : -1);
+    return csFlip();
+  }
   $('#dock').addEventListener('pointerup', csFingerEnd, true); $('#dock').addEventListener('pointercancel', csFingerEnd, true);
   // A tap on Chats while Chats is in front: the sheet (again: it closes). From elsewhere: app-sections.js goes to Chats.
   $('#dock').addEventListener('click', e => {

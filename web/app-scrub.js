@@ -37,7 +37,7 @@ window.WizCore.appParts.scrub = function ({ $, appVars, BAR_FLICK_MIN, BAR_FLICK
     appVars.DS = { x: g.x, y: g.y, t: g.t, id: e.pointerId, h: true, ts: g.ts ?? e.timeStamp, start: appVars.idx, at: appVars.idx, live: false, up: false };
     // Chats in front (app-chatsswitch.js): the drag steps one Chats view when it lifts.
     const st = typeof chatsStepper === 'function' && chatsStepper(); if (st) { appVars.DS.step = st; return true; }
-    // Apps in front with switch wizard/apps-panel (app-appspanel.js): the drag steps one recent app when it lifts.
+    // Apps in front (app-appspanel.js): the drag steps one recent app when it lifts.
     if (typeof appsStepping === 'function' && appsStepping()) { appVars.DS.step = true; return true; }
     endDotHold(); if (appVars.sheet === 'settings') liftSettings();
     barScrubLive(appVars.DS, e); return true;

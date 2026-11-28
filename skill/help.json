@@ -413,11 +413,6 @@
       "help": "Inbox: only what blocks you.",
       "where": "Settings › Appearance › Try new features › Smart inbox: only what needs you"
     },
-    "wizard/apps-panel": {
-      "help": "On the phone, tapping Apps opens a slim Favorites panel (search, Favorites, Recent with an x to take an app off) and holding Apps shows nine big bubbles of your recent apps: slide onto one and let go. With an app in front, swipe the bar sideways to step through Recent.",
-      "where": "Settings › Appearance › Try new features › Phone Apps tile: Favorites panel and quick switcher",
-      "when": "phone only"
-    },
     "wizard/desktop-bottom-bar": {
       "help": "Apps bar at the bottom on any width.",
       "where": "Settings › Appearance › Try new features › Bottom app bar on desktop"
@@ -620,6 +615,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Phone Apps panel": "on for everyone: tap Apps for Favorites and Recent, hold it for nine bubbles.",
     "Pin to top": "on for everyone: pins stay first in Inbox.",
     "Get set up list in Setup": "on for everyone: Setup lists optional accounts to connect.",
     "Reply buttons": "on for everyone: a tap answers.",

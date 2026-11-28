@@ -1,5 +1,5 @@
-/* Wizard UX phone shell › the Apps tile's Favorites panel and hold-for-nine quick switcher (wizard-ux#1955, switch
- * wizard/apps-panel, off by default; the phone's four-section bar, app-sections.js).
+/* Wizard UX phone shell › the Apps tile's Favorites panel and hold-for-nine quick switcher (wizard-ux#1955, on for
+ * everyone since the switch wizard/apps-panel went; the phone's four-section bar, app-sections.js).
  *
  * Tap Apps: a slim panel above the tile instead of the full-screen Apps sheet. Top to bottom: \"Search apps\" with All
  * apps and Get apps, Favorites (the owner's pinned apps, in order, with Edit), Recent (the last four apps used that are
@@ -17,12 +17,13 @@
 window.WizCore = window.WizCore || {};
 window.WizCore.appParts = window.WizCore.appParts || {};
 window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP, device, esc, ico, LIVE, norm, openApp, openStoreKind, phoneBack, store, tapOpen, toast, vib }) {
-  const AP_SW = 'wizard/apps-panel', AP_FAV = 'wos.apps.favorites.v1', AP_HID = 'wos.apps.recentHidden.v1', AP_ID = /^[A-Za-z0-9._-]{1,80}$/;
+  const AP_FAV = 'wos.apps.favorites.v1', AP_HID = 'wos.apps.recentHidden.v1', AP_ID = /^[A-Za-z0-9._-]{1,80}$/;
   // var, not let: the shell's tests put this body back into app.js (tests/fixtures/app-parts.mjs), where its hoisted
   // functions may run before this body has; apReady is true only once all of it has.
   var apReady = false;
+  // Up wherever the phone's four-section bar is (never on the desktop shell).
   function apOn() {
-    try { return (document.documentElement.getAttribute('data-tweaks') || '').split(' ').includes(AP_SW) && !!window.WizCore.phoneSections?.on?.(); } catch (_) { return false; }
+    try { return !!window.WizCore.phoneSections?.on?.(); } catch (_) { return false; }
   }
   /* ---- the lists ---- */
   // An agent's chats are the tile `agent:<id>` (core/apps.js); the box's ui-preferences take app ids without a colon,
@@ -312,11 +313,11 @@ window.WizCore.appParts.appspanel = function ({ $, APP, APPS, appVars, CHATS_APP
   /* ---- staying in step ---- */
   addEventListener('wizard:apps', () => apPaint());
   addEventListener('wos:prefs', () => apPaint());
-  new MutationObserver(() => { if (!apOn()) { apClose(); apGridClose(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks', 'data-shell'] });
+  new MutationObserver(() => { if (!apOn()) { apClose(); apGridClose(); } }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-shell'] });
   apReady = true;
   // Read-only view for tests and QA.
-  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep });
-  // appsPanelOpen: the Apps tile's selector; false when the switch is off (the Apps sheet opens as before).
+  window.WizCore.appsPanel = Object.freeze({ on: apOn, isOpen: () => apState.open, view: () => ({ ...apState }), favorites: apFavs, recent: apRecent, nine: apNine, stepList: apStepList, front: apFront, open: apOpen, close: apClose, step: apStep, stepping: apStepping });
+  // appsPanelOpen: the Apps tile's selector; false only before this part is ready (the Apps sheet opens then).
   const appsPanelOpen = () => apOpen();
   // The Apps tile tapped while the panel is up (or closed by this same finger): it goes away, nothing else happens.
   const appsPanelToggled = () => { if (apClose()) return true; return Date.now() - apState.closedAt < 500; };

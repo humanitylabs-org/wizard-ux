@@ -1313,7 +1313,7 @@
     "app-appspanel.js": {
       "shell": "phone",
       "classification": "adapter",
-      "reason": "Phone shell part (wizard-ux#1955, switch wizard/apps-panel): the four-section bar's Apps tile opens a slim Favorites panel, holding it shows nine recent apps, and a bar swipe steps through Recent; the desktop has its own app sidebar."
+      "reason": "Phone shell part (wizard-ux#1955, on for everyone): the four-section bar's Apps tile opens a slim Favorites panel, holding it shows nine recent apps, and a bar swipe steps through Recent; the desktop has its own app sidebar."
     },
     "app-arc.js": {
       "shell": "phone",

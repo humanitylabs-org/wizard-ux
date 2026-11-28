@@ -77,7 +77,7 @@ window.WizCore.liveParts.work = function ({ J, req }) {
     savedWizards: ['wos.workspaces.box.v1', v => Array.isArray(v), JSON.stringify],
     // The phone bar's pinned slot (app-sections.js, wizard-ux#1929): an app id, '' = Messenger.
     phoneSlot: ['wos.phone.slot.v1', v => typeof v === 'string' && /^[A-Za-z0-9._-]{0,80}$/.test(v), String],
-    // The phone Apps panel (app-appspanel.js, switch wizard/apps-panel): Favorites in order, and the apps taken off Recent.
+    // The phone Apps panel (app-appspanel.js, wizard-ux#1955): Favorites in order, and the apps taken off Recent.
     appFavorites: ['wos.apps.favorites.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(x)), JSON.stringify],
     appRecentHidden: ['wos.apps.recentHidden.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(x)), JSON.stringify],
   };

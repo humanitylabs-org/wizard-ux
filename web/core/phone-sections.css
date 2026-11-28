@@ -36,3 +36,94 @@ html:root .sec-pin .lapp.sec-pinned .ic { box-shadow: 0 0 0 2px var(--wz-accent,
 html:root .sec-pin .sec-reset { display: block; margin: 16px auto 4px; padding: 10px 18px; border-radius: 99px; border: 1px solid var(--line-2);
   color: var(--wz-text, var(--ink)); font: 600 .875rem/1.2 var(--font, system-ui, sans-serif); }
 html:root .sec-pin .sec-reset[disabled] { opacity: .4; }
+
+/* The phone Apps tile (wizard-ux#1955, on for everyone since the switch wizard/apps-panel went): the Favorites panel and
+ * the hold-for-nine bubbles, drawn by app-appspanel.js while the four-section bar is up. Colours come from the skin's
+ * --wz-* tokens, so a live skin change repaints them; text panels are opaque. Rows follow the desktop app sidebar
+ * (.aad-vtab): a 24 px icon tile and a 14 px name, 44 px tall for a finger. */
+html:root .ap-scrim { position: absolute; inset: 0; z-index: 48; background: color-mix(in srgb, black 30%, transparent); opacity: 0; transition: opacity 200ms; }
+html:root .ap-scrim.open { opacity: 1; }
+html:root .ap-scrim.ap-deep { background: color-mix(in srgb, black 55%, transparent); }
+html:root :is(.ap-scrim, .ap-panel, .ap-grid)[hidden] { display: none !important; }
+html:root .ap-panel {
+  --ap-bottom: var(--ap-above, calc(var(--dock-h, 84px) + var(--safe-b, 0px)));
+  --ap-ink: var(--wz-text, var(--ink)); --ap-ink-2: var(--wz-text-secondary, var(--ink-2)); --ap-ink-3: var(--wz-text-muted, var(--ink-3));
+  --ap-line: var(--wz-border, var(--line-2)); --ap-hover: color-mix(in srgb, var(--ap-ink) 8%, transparent);
+  position: absolute; z-index: 49; right: max(6px, env(safe-area-inset-right, 0px)); bottom: var(--ap-bottom);
+  width: max(190px, 54%); max-width: calc(100% - 12px); max-height: calc(100% - var(--ap-bottom) - 44px - var(--safe-t, 0px)); box-sizing: border-box;
+  display: flex; flex-direction: column; overflow: hidden; border-radius: 18px; border: 1px solid var(--ap-line); color: var(--ap-ink);
+  background-color: var(--bg); background-image: linear-gradient(var(--wz-panel, var(--wz-base, var(--bg))), var(--wz-panel, var(--wz-base, var(--bg))));
+  box-shadow: 0 18px 44px -12px color-mix(in srgb, black 55%, transparent); font-family: var(--wz-font-ui, var(--font, system-ui, sans-serif));
+  transform-origin: 100% 100%; transform: translateY(14px) scale(.96); opacity: 0; transition: transform 200ms var(--ease, ease), opacity 160ms;
+}
+html:root .ap-panel.open { transform: none; opacity: 1; }
+html:root .ap-panel.ap-tall { height: calc(100% - var(--ap-bottom) - 44px - var(--safe-t, 0px)); }
+html:root .ap-top { flex: none; display: flex; align-items: center; gap: 0; padding: 4px 2px 2px 6px; margin: 0; }
+html:root .ap-q { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 5px; padding: 0 6px 0 8px; container-type: inline-size; box-sizing: border-box; border-radius: 12px;
+  background: var(--wz-surface, color-mix(in srgb, var(--ap-ink) 7%, transparent)); color: var(--ap-ink-3); }
+html:root .ap-q svg { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+html:root .ap-q input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; padding: 0; background: none; color: var(--ap-ink); font: 400 .84375rem/1.2 var(--wz-font-ui, var(--font, system-ui, sans-serif)); -webkit-appearance: none; appearance: none; }
+/* A narrow phone: the field drops its magnifier so "Search apps" fits whole. */
+@container (max-width: 112px) { html:root .ap-q svg { display: none; } }
+html:root .ap-q input::placeholder { color: var(--ap-ink-3); opacity: 1; }
+html:root .ap-q input::-webkit-search-cancel-button { display: none; }
+html:root .ap-ib { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; margin: 0; border: 0; border-radius: 12px; background: none; color: var(--ap-ink-2); -webkit-tap-highlight-color: transparent; }
+html:root .ap-ib svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ap-ib:active { background: var(--ap-hover); }
+html:root .ap-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: none; padding: 0 6px 6px; touch-action: pan-y; }
+html:root .ap-h { display: flex; align-items: center; min-height: 36px; padding: 0 0 0 8px; border-top: 1px solid color-mix(in srgb, var(--ap-line) 60%, transparent); margin-top: 2px; }
+html:root .ap-body > .ap-h:first-child { border-top: 0; margin-top: 0; }
+html:root .ap-ht { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ap-ink-3); font: 600 .78125rem/1.3 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html:root .ap-ht .ap-back { margin-left: -10px; color: var(--ap-ink); }
+html:root .ap-tb { flex: none; min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 8px; margin: -4px 0; border: 0; border-radius: 12px;
+  background: none; color: var(--wz-accent, var(--violet-2)); font: 600 .8125rem/1 var(--wz-font-ui, var(--font, system-ui, sans-serif)); -webkit-tap-highlight-color: transparent; }
+html:root .ap-tb svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+html:root .ap-list { display: flex; flex-direction: column; gap: 0; }
+html:root .ap-row { position: relative; display: flex; align-items: center; min-width: 0; height: 44px; border-radius: 10px; }
+html:root .ap-open { flex: 1; min-width: 0; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 8px; margin: 0; border: 0; border-radius: 10px; background: none; color: var(--ap-ink); text-align: left; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; }
+html:root button.ap-open:active, html:root .ap-row.ap-best > .ap-open { background: var(--ap-hover); }
+html:root .ap-ic.sgt { flex: none; width: 24px; height: 24px; border-radius: 7px; font-size: .75rem; box-shadow: none; }
+html:root .ap-ic.sgt::before { display: none; }
+/* Icon tiles from the skin's own panel and text colours, tinted by the app's colour, so the glyph reads on a dark skin
+ * and on a light one (a light skin draws glyphs dark). */
+html:root :is(.ap-ic, .ap-bi).sgt {
+  background: color-mix(in srgb, var(--c) 16%, color-mix(in srgb, var(--wz-text, var(--ink)) 8%, var(--wz-panel, var(--bg))));
+  border: 1px solid color-mix(in srgb, var(--c) 32%, var(--wz-border, var(--line-2))); }
+html:root :is(.ap-ic, .ap-bi).sgt::after { display: none; }
+html:root .ap-ic.sgt .sgi { width: 72%; height: 72%; }
+html:root .ap-nm { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 .875rem/1.3 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html:root .ap-x { color: var(--ap-ink-3); opacity: .8; }
+html:root .ap-x svg { width: 14px; height: 14px; stroke-width: 2.2; }
+html:root .ap-minus { color: var(--wz-danger, var(--red)); width: 36px; }
+html:root .ap-editing .ap-open { padding-left: 2px; }
+html:root .ap-drag { color: var(--ap-ink-3); touch-action: none; cursor: grab; }
+html:root .ap-row.ap-dragging { background: var(--ap-hover); box-shadow: 0 6px 18px -8px color-mix(in srgb, black 60%, transparent); z-index: 1; }
+html:root .ap-star { color: var(--ap-ink-3); width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; background: none; }
+html:root .ap-star svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; }
+html:root .ap-star.on { color: var(--amber); }
+html:root .ap-star.on svg { fill: currentColor; }
+html:root .ap-empty { margin: 2px 8px 2px; color: var(--ap-ink-2); font: 400 .8125rem/1.4 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html:root .ap-none { margin: 10px 8px; color: var(--ap-ink-3); font: 400 .8125rem/1.4 var(--wz-font-ui, var(--font, system-ui, sans-serif)); }
+html:root .ap-add { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 8px; margin: 0 0 2px; border: 0; border-radius: 10px; background: none;
+  color: var(--wz-accent, var(--violet-2)); font: 600 .875rem/1.2 var(--wz-font-ui, var(--font, system-ui, sans-serif)); text-align: left; }
+html:root .ap-add svg { width: 20px; height: 20px; padding: 2px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+html:root .ap-add:active { background: var(--ap-hover); }
+
+/* Hold Apps: nine round glowing bubbles in a card just above the tile, the newest bottom-right. */
+html:root .ap-grid {
+  position: absolute; z-index: 52; right: var(--ap-right, 6px); bottom: var(--ap-above, calc(var(--dock-h, 84px) + var(--safe-b, 0px)));
+  display: grid; grid-template-columns: repeat(3, 68px); grid-template-rows: repeat(3, 68px); padding: 6px 2px 2px; border-radius: 22px;
+  border: 1px solid var(--wz-border, var(--line-2));
+  background-color: var(--bg); background-image: linear-gradient(var(--wz-panel, var(--wz-base, var(--bg))), var(--wz-panel, var(--wz-base, var(--bg))));
+  box-shadow: 0 18px 44px -12px color-mix(in srgb, black 60%, transparent); transform-origin: 85% 100%; transform: scale(.9); opacity: 0; transition: transform 180ms var(--ease, ease), opacity 140ms;
+  font-family: var(--wz-font-ui, var(--font, system-ui, sans-serif)); color: var(--wz-text, var(--ink));
+}
+html:root .ap-grid.open { transform: none; opacity: 1; }
+html:root .ap-bub { position: relative; width: 68px; height: 68px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 0; padding: 0; margin: 0; border: 0; background: none; color: inherit; -webkit-tap-highlight-color: transparent; }
+html:root .ap-bi.sgt { flex: none; width: 56px; height: 56px; border-radius: 50%; font-size: 1.625rem; transition: transform 140ms var(--spring, ease), box-shadow 140ms;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 0 18px -4px color-mix(in srgb, var(--c) 70%, transparent), inset 0 1px 0 color-mix(in srgb, white 10%, transparent); }
+html:root .ap-bi.sgt::before { border-radius: 50%; }
+html:root .ap-bi.sgt .sgi { width: 46%; height: 46%; }
+html:root .ap-bn { max-width: 66px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 .625rem/1.1 var(--wz-font-ui, var(--font, system-ui, sans-serif)); color: var(--wz-text-secondary, var(--ink-2)); }
+html:root .ap-bub.hot .ap-bi.sgt { transform: scale(1.12); box-shadow: 0 0 0 2px var(--c), 0 0 26px 2px color-mix(in srgb, var(--c) 70%, transparent); }
+html:root .ap-bub.hot .ap-bn { color: var(--wz-text, var(--ink)); }
