@@ -454,10 +454,6 @@
       "help": "Sends features you tried and your thumbs, plus a random box id.",
       "where": "Settings › Appearance › Try new features › Share feature counts"
     },
-    "wizard/feature-counts-ask": {
-      "help": "Shared only after you say Share.",
-      "where": "Settings › Appearance › Try new features › Ask before sharing feature counts"
-    },
     "wizard/install-agent-builds": {
       "help": "Apps I build install with one tap.",
       "where": "Settings › Appearance › Try new features › Install apps your agent builds"
@@ -656,6 +652,7 @@
     "Why would I want private AI?": "Claude and ChatGPT keep what you send on their servers; private AI runs in sealed hardware (Tinfoil) that nobody else, not even us, can see into. Settings › Privacy › Why it matters."
   },
   "retired": {
+    "Ask before sharing feature counts": "on for everyone, nothing to turn on: Share feature counts stays off until you say Share to one prompt that names exactly what is sent (switch id, tried, thumbs, a random box id; no content, no identity). It opens the first time you tap a thumb in an app's Try new features, or when you turn Share feature counts on; Don't share keeps it off. Turning it off again is one tap in Settings › Appearance › Try new features.",
     "Install sheet recommends private AI": "on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.",
     "Agent access under the browser boundary": "on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.",
     "Channels in Chats": "on for everyone now, nothing to turn on: open Chats and use the tabs at the bottom: Inbox (what needs you), Tags (your channels) and Sent. Tags lists your Spaces one per line, plus General; open one to see its chats as posts with a reply line.",
