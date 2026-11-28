@@ -161,7 +161,6 @@ Phone: things only the Android app can do: Wizard Everywhere (floating orb), sid
 
 Settings › Appearance › Try new features lists unfinished features to try, A to Z, each 'by <author>'. It only shows on the For testers channel; on For everyone these switches stay hidden and off. The same switches are also in the WizardOS Tracker app (Try it). Choices follow the owner to every device.
 
-- **Add an app: search the App Store too**: Add an app's search also finds App Store apps.
 - **Archive on top**: Archive is the first section of the Chats list in both By day and By status, so switching layouts never moves it.
 - **Ask before sharing feature counts**: Shared only after you say Share.
 - **Automatic chat tags**: Chats are tagged from what they are about; a channel's What goes here… edits its list.
@@ -201,6 +200,7 @@ Switches that are ordinary settings or views, not tester switches:
 - **Different shell view - AI apps**: The AI apps view: chats in a left sidebar that folds to a slim rail, the chat in a centred column, your apps in a right column; an app opens beside the chat. Where: desktop: Settings › Appearance › Shell view › AI apps (the standard desktop view; Desks is the other choice). (desktop only).
 
 No longer switches (owners and old chats may still name them):
+- **Add an app: search the App Store too**: on for everyone, nothing to turn on: on the AI apps desktop, typing in Add an app (the Apps column's +, or ⌥A) also lists App Store apps you don't have yet under In the App Store, each with Get; picking one opens its App Store page.
 - **Result reader**: on for everyone, nothing to turn on: a private model reads how each finished background task ended and files it in the inbox (waiting on you, a result, or a quiet note); the agent's status line is only a hint.
 - **Install sheet recommends private AI**: on for everyone, nothing to turn on: installing an app that holds personal data on a Wizard with no private agent shows a Private AI recommended card with Set up private AI, Use Claude (your standard AI) for now and Why it matters.
 - **Agent access under the browser boundary**: on for everyone, nothing to turn on: with the browser boundary on, Connected accounts' Agent access screen shows which agents may use each account app, and a tap there changes it.
