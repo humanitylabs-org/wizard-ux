@@ -1243,3 +1243,12 @@ html:root .ch-sheet-b button[data-rssentfix][aria-pressed="true"] svg { stroke: 
 html:root .ch-sheet-b button[data-rssentfix]:disabled { opacity: .55; cursor: progress; }
 /* The thread open beside the list (the AI apps sidebar pane, wizard-ux issue 1966). */
 html:root .ch-list .ch-ib-wrap.cur > .ch-row.ch-ib-row { background: color-mix(in srgb, var(--wz-text) 9%, transparent); }
+/* New chat quick links (wizard-ux issue 1965, on for everyone; switch wizard/new-chat-chips removed): a short row of chips right above the message box of a new, empty chat.
+ * They wrap rather than hide one off screen when a narrow phone or a wide font can't fit them on one line. */
+html:root .ch-quick { flex: 0 0 auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 10px 8px; box-sizing: border-box; }
+html:root .ch-quick button { flex: 0 0 auto; white-space: nowrap; min-height: 40px; padding: 7px 12px; border: 1px solid var(--wz-border, var(--line-2)); border-radius: 20px; background: var(--wz-surface-raised, var(--wz-surface, transparent)); color: var(--wz-text, var(--ink)); font: inherit; font-size: .84375rem; font-weight: 600; line-height: 1.2; cursor: pointer; }
+html:root .ch-quick button:hover { border-color: var(--wz-accent, var(--violet-2)); }
+html:root .ch-quick button:disabled { opacity: .6; cursor: default; }
+html:root .ch-quick button:focus-visible { outline: 2px solid var(--wz-accent, var(--violet-2)); outline-offset: 2px; }
+/* Words in the box: the chips step aside (a tap would send the chip, not the words), back once it is empty. */
+html:root .ch-quick:has(+ .ch-compose.has-text) { display: none; }
