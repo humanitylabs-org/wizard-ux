@@ -32,7 +32,6 @@
     "wizard/app-picker-store-search",
     "wizard/phone-push",
     "wizard/install-agent-builds",
-    "wizard/phone-badge-look",
     "wizard/inbox-pin-top",
     "wizard/smart-inbox",
     "wizard/phone-recovery-mode",
