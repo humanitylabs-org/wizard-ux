@@ -108,9 +108,9 @@
   }
   const tapLine = t => `Tapped ${t.label} · ${t.group}`;
   // [WIZARD_CHOICES_V1]{"choices":["Get on top of my inbox","Find a job",…]}[/WIZARD_CHOICES_V1], on its own line: tap-to-pick
-  // replies under the answer (wizard-agent-service issue 650, switch wizard/first-chat-goals; the agent writes it on a first
+  // replies under the answer (wizard-agent-service issue 650, on for everyone; the agent writes it on a first
   // chat, wizard-guide "First chat: five choices"). Plain one-line texts, 1-80 characters, at most 5, first marker only.
-  // Always hidden from the text; drawn only while the switch is on (core/chats-attach.js turnHtml).
+  // Always hidden from the text; drawn as buttons by core/chats-attach.js turnHtml.
   const CHOICES_RE = /\[WIZARD_CHOICES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_CHOICES_V1\]/;
   function choiceList(s) {
     const out = [], m = String(s || '').match(CHOICES_RE);
