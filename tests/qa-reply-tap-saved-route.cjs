@@ -4,7 +4,7 @@
 // with a Done button and no owner message; its list row names the thread's saved route (model + provider, the model
 // lock the scheduled post set), its single-thread read (`?view=detail`) names the model but, like the Agent Service
 // before the fix, no provider; and the phone's model list read fails (QA_MODELS=fail, default) or is empty
-// (QA_MODELS=empty). Phone 412x915 and desktop 1440x900, Nebula, switch wizard/reply-buttons on.
+// (QA_MODELS=empty). Phone 412x915 and desktop 1440x900, Nebula, reply buttons on for everyone.
 //   Fixed: the tap goes as one run on the thread's saved route and no "Not sent": with the provider when the row or a
 //   fresh single-thread read names it (claude-sonnet-5-5 / anthropic), else with no model or provider at all, which the
 //   box runs on the thread's model lock (like the Agent Service's locked-run bridge). Cases that drop the thread from
@@ -49,7 +49,7 @@ async function boot(browser, box, shell, entry) {
   await context.addInitScript(({ shell }) => {
     if (window !== top) return;
     for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula',
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: { 'wizard/reply-buttons': true } }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
   }, { shell });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;

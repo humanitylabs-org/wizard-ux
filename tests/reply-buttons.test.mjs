@@ -1,4 +1,4 @@
-// Tap-to-answer buttons inside agent replies (wizard-ux issue 1889, switch wizard/reply-buttons). The agent writes
+// Tap-to-answer buttons inside agent replies (wizard-ux issue 1889, on for everyone; switch wizard/reply-buttons removed). The agent writes
 // [WIZARD_BUTTONS_V1]{"group","buttons":[{"id","label"}]}[/WIZARD_BUTTONS_V1] lines; the reply draws each group where
 // it sits; taps within a few seconds go back as ONE owner message carrying [WIZARD_TAPS_V1]{"taps":[...]}; the picked
 // state is read back from the thread's own history. Runs the real chat-kit.js, action-cards.js and live.js normalizer.
@@ -15,8 +15,8 @@ const GROUP = (group, ...labels) => `[WIZARD_BUTTONS_V1]${JSON.stringify({ group
 const REPLY = `Two things today.\n\n**Ship desks?** I tested both layouts.\n${GROUP('Ship desks', 'Go for it', 'Drop this')}\n\n**Morning**\n1. Workout\n${GROUP('Workout', 'Done')}\n\nThat's all.`;
 const rows = (content, extra = []) => [{ role: 'user', timestamp: 1, content: 'What is up today?' }, { id: 41, role: 'assistant', timestamp: 2, content }, ...extra];
 
-function world({ on = true } = {}) {
-  const docEl = { dataset: { tweaks: on ? 'wizard/reply-buttons' : '' } };
+function world() {
+  const docEl = { dataset: { tweaks: '' } }; // no switch on the page: the buttons are on for everyone
   const ctx = { URL, Intl, Date, JSON, Promise, Map, Set, navigator: {}, setTimeout, clearTimeout, CSS: { escape: s => String(s) },
     location: { origin: 'https://box.example', href: 'https://box.example/wizard-os-home/' },
     document: { documentElement: docEl, activeElement: null, visibilityState: 'visible', addEventListener() {}, querySelector() { return null; }, querySelectorAll: () => [] },
@@ -126,11 +126,12 @@ test('history: the picked state comes back on reload and on a second device; loc
   assert.doesNotMatch(locked.slice(0, locked.indexOf('Workout')), /disabled/, 'Ship desks still open');
 });
 
-test('switch off: no tap is sent; a failed save puts the buttons back', async () => {
-  const off = world({ on: false }), sent = [];
-  assert.equal(off.AC.replyOn(), false);
-  assert.equal(off.AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid: 's4', send: async t => { sent.push(t); return {}; } }), true);
-  await off.AC.replyFlush('s4'); assert.equal(sent.length, 0);
+test('no switch: a tap is sent with no tweak on the page; a failed save puts the buttons back', async () => {
+  const plain = world(), sent = [];
+  assert.equal(plain.AC.replyOn, undefined, 'no switch left to ask');
+  assert.equal(plain.AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid: 's4', send: async t => { sent.push(t); return {}; } }), true);
+  await plain.AC.replyFlush('s4'); assert.equal(sent.length, 1);
+  assert.match(sent[0], /^Tapped Done · Workout\n\[WIZARD_TAPS_V1\]/);
   const { KIT, AC } = world(), toasts = [];
   AC.replyTap(button('41', 'Workout', 'done', 'Done'), { sid: 's5', send: async () => null, toast: (i, t) => toasts.push(t) });
   await AC.replyFlush('s5');
@@ -227,7 +228,7 @@ test('reporter rewrite that failed: the original reply stands', () => {
 });
 
 // Issue 1963: several groups with the same labels (Approve / Decline) looked identical; each row names its ask on
-// screen, picked and locked rows keep it, and the text fallback (Copy, switch off) names it too.
+// screen, picked and locked rows keep it, and the text fallback (Copy, older clients) names it too.
 test('asks: every row shows its group as a caption, also picked and locked; the fallback names the ask', async () => {
   const { KIT, AC } = world(), sent = [];
   const ASKS = `Four things to decide.\n${GROUP('Smart inbox switch', 'Approve', 'Decline')}\n${GROUP('Typed messages go quiet', 'Approve', 'Decline')}`;

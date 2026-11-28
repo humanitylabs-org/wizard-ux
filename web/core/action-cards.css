@@ -27,3 +27,19 @@ html:root .msg.a .ch-choices { display: flex; flex-wrap: wrap; gap: 8px; margin:
 html:root .msg.a .ch-choices button { min-height: 44px; padding: 10px 14px; border: 1px solid var(--wz-accent); border-radius: 22px; background: var(--wz-surface-raised, var(--wz-surface)); color: var(--wz-text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 html:root .msg.a .ch-choices button:disabled { opacity: .6; cursor: default; }
 html:root .msg.a .ch-choices button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+/* Tap to answer in replies (WIZARD_BUTTONS_V1, wizard-ux issue 1889; on for everyone, switch wizard/reply-buttons removed):
+ * plain buttons inside the reply's text, no card. Picked = accent, the group's others dimmed; the owner's taps are one
+ * quiet machine line each (core/action-cards.js reply buttons). */
+html:root .msg.a .ch-rb { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+/* Each row names the ask it answers (issue 1963): a caption line above its buttons, kept when picked or locked. */
+html:root .msg.a .ch-rb .ch-rb-ask { flex: 0 0 100%; margin: 0 0 -2px; font-size: .82em; font-weight: 600; line-height: 1.3; color: var(--wz-text-muted, var(--ink-3)); overflow-wrap: anywhere; }
+html:root .msg.a .ch-rb .ch-rb-btn { min-height: 40px; max-width: 100%; padding: 8px 14px; border: 1px solid var(--wz-border); border-radius: 12px;
+  background: linear-gradient(var(--wz-surface-raised, var(--wz-surface)), var(--wz-surface-raised, var(--wz-surface))), var(--wz-panel, var(--wz-base, var(--bg)));
+  color: var(--wz-text); font: inherit; line-height: 1.25; text-align: center; overflow-wrap: anywhere; cursor: pointer; transition: opacity 120ms var(--ease, ease); }
+html:root .msg.a .ch-rb .ch-rb-btn.on { background: var(--wz-accent); border-color: var(--wz-accent); color: var(--wz-on-accent, var(--wz-text)); font-weight: 600; }
+html:root .msg.a .ch-rb .ch-rb-btn.dim { opacity: .5; }
+html:root .msg.a .ch-rb .ch-rb-btn:disabled { cursor: default; }
+html:root .msg.a .ch-rb .ch-rb-btn:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+html:root .ch-taps { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+html:root .ch-taps .ch-rb-at { padding: 0; border: 0; font-weight: 500; color: var(--wz-text-muted, var(--ink-3)); }
+html:root .msg.u.ch-taps-pending { align-self: center; display: flex; flex-direction: column; align-items: center; background: none; }

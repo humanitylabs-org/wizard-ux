@@ -1,16 +1,15 @@
 'use strict';
-// Tap-to-answer buttons inside agent replies (wizard-ux issue 1889, switch wizard/reply-buttons) in a real browser. A
+// Tap-to-answer buttons inside agent replies (wizard-ux issue 1889, on for everyone; switch wizard/reply-buttons removed) in a real browser. A
 // disposable synthetic box (nothing real is read or written) keeps the threads' messages in memory and answers the
 // outbox's POST /wizard/hermes/v1/runs like Hermes: the owner's message lands in the history, the agent answers on cue.
 // Phone 412x915 and desktop 1440x900 (Classic), Nebula.
-//   QA_SWITCH=on (default): a reply with two button groups shows them where their lines sit, between the text; a tap
+//   A reply with two button groups shows them where their lines sit, between the text; a tap
 //     marks the pick on its frame; one tap in each group goes as ONE run naming both (nothing before the batch window
 //     ends); the thread shows the taps as machine lines, never as an owner bubble or marker text; a change before the
 //     agent answers sends the new pick; once the agent answered the picks are locked; a reload and a second device show
 //     the same picks; routed threads (host profile, container, restricted) send the same way to their own agent.
-//   QA_SWITCH=off: no buttons, the labels as text, nothing sent. QA_EXPECT=broken (QA_WEB=<main worktree>/web) records
-//     main (the marker shows as raw text there).
-// Every case writes plain-<shell>-<switch>.html: the thread of a reply WITHOUT buttons, to compare on, off and main.
+//   QA_EXPECT=broken (QA_WEB=<an older worktree>/web) records a build before the buttons (the marker as raw text).
+// Every case writes plain-<shell>-<switch>.html: the thread of a reply WITHOUT buttons, to compare with an older build.
 // Screens in QA_OUT: <shell>-<switch>.png (+ -tapped, -locked, -device2).
 const assert = require('node:assert/strict');
 const { chromium } = require('../tools/qa-playwright.cjs');
@@ -18,7 +17,7 @@ const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-reply-buttons.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-reply-buttons-evidence');
-const SWITCH = process.env.QA_SWITCH || 'on', EXPECT = process.env.QA_EXPECT || 'fixed', SHELLS = (process.env.QA_SHELLS || 'phone,desktop').split(',');
+const SWITCH = 'on', EXPECT = process.env.QA_EXPECT || 'fixed', SHELLS = (process.env.QA_SHELLS || 'phone,desktop').split(',');
 const SKIN = process.env.QA_SKIN || 'nebula';
 fs.mkdirSync(out, { recursive: true });
 const now = Date.now(), iso = t => new Date(t).toISOString(), nap = ms => new Promise(r => setTimeout(r, ms));
@@ -60,7 +59,7 @@ async function boot(browser, box, shell, entry) {
   await context.addInitScript(({ shell, on, skin }) => {
     if (window !== top) return;
     for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wux.shell': shell, 'wos.desktop-view.v1': 'classic', 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin,
-      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: on ? { 'wizard/reply-buttons': true } : {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
+      'wos.skin-tweaks.v1': JSON.stringify({ version: 1, preset: 'none', off: {}, mix: {} }) })) if (localStorage.getItem(k) === null || k === 'wos.skin-tweaks.v1') localStorage.setItem(k, v);
   }, { shell, on: SWITCH === 'on', skin: SKIN });
   await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
@@ -134,8 +133,6 @@ const reopen = async (page, phone, sid) => { await openThread(page, phone, sid);
       try {
         ctx = await boot(browser, box, shell, entry);
         const { page } = ctx;
-        entry.switchOn = await page.evaluate(() => (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/reply-buttons'));
-        if (EXPECT !== 'broken') assert.equal(entry.switchOn, SWITCH === 'on', 'switch state as asked');
         // A reply WITHOUT buttons: its thread markup, to compare on / off / main (renders exactly as today).
         await openThread(page, phone, 'qa-plain');
         fs.writeFileSync(path.join(out, `plain-${stem}.html`), (await thread(page).locator('.ch-msgs').first().innerHTML()).replace(/ data-(at|mat|boom-at)="[^"]*"/g, '').replace(/1\d{12}(\.\d+)?/g, 'T').replace(/<time[^>]*>[^<]*<\/time>/g, '<time></time>'));

@@ -121,7 +121,7 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
     const voice = p.audio || p.audioFile ? `<div class="fchips"><span class="fchip">${MIC_SVG} Voice note${p.text || ['empty', 'held'].includes(p.state) ? '' : ' · words come when it sends'}</span></div>` : '';
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     // Reply-button taps on their way (wizard-ux issue 1889): the same quiet machine line as once they land.
-    const RB = globalThis.WosActionCards?.replyOn?.() ? globalThis.WosActionCards : null, taps = RB && p.text ? KIT.tapsOf?.(p.text)?.taps || [] : [];
+    const RB = globalThis.WosActionCards?.tapLinesHtml ? globalThis.WosActionCards : null, taps = RB && p.text ? KIT.tapsOf?.(p.text)?.taps || [] : [];
     if (taps.length) return `<div class="msg u pending ${p.state} ch-taps-pending" data-ob="${esc(p.id)}"><div class="ch-renamed ch-taps" data-rb-taps>${RB.tapLinesHtml(taps)}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}${p.reply ? ' has-rq' : ''}" data-ob="${esc(p.id)}"><div class="bub">${replyCard(KIT.reply.clean(p.reply))}${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
   }
