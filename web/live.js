@@ -49,7 +49,7 @@
       // The slim title index is re-read only when the list's build moved (wizard-ux issue 1693): the window
       // hashes the same selection for both shapes, so an unchanged build means an unchanged index. Checked on the
       // first page, so a head-only poll of a long list also refreshes search when something changed.
-      if (!build && typeof p.build === 'string') { build = p.build; if (TITLE_INDEX.get(agent)?.build !== build) setTimeout(()=>{void fetchTitleIndex(agent)},0); }
+      if (!build && typeof p.build === 'string') { build = p.build; if (TITLE_INDEX.get(agent)?.build !== build && !titleFailing(agent)) setTimeout(()=>{void fetchTitleIndex(agent)},0); }
       if (p.window === 'archive-50') meta = { archiveTotal:p.archive_total, archiveReturned:p.archive_returned, cursor:p.archive_cursor };
       const rows = p.data || p.sessions || p.items || [];
       out.push(...rows.map(normalize).filter(Boolean));
@@ -64,6 +64,10 @@
   }
   // A compact, scope-separated title/preview index. Never persist private-agent rows.
   const TITLE_PREFIX='wos.chats.titles.v1:', TITLE_INDEX=new Map(), TITLE_LOADING=new Map();
+  // A title index read the box keeps refusing (wizard-ux issue 2055: a 502 on every try) is asked again at most every
+  // 5 minutes, not on every list read: each failed try held the box for about a second while a thread was opening.
+  const TITLE_FAILED=new Map(), TITLE_RETRY=5*60000;
+  const titleFailing=scope=>Date.now()-(TITLE_FAILED.get(scope)||-Infinity)<TITLE_RETRY;
   let titleAccount='', titleEpoch=0;
   function clearTitleIndex() {
     TITLE_INDEX.clear(); TITLE_LOADING.clear(); titleAccount=''; titleEpoch++;
@@ -101,7 +105,7 @@
           // Validate the account and the current server build before using any persisted rows.
           if(!scope && titleAccount) try {
             const cached=JSON.parse(localStorage.getItem(key)||'null');
-            if(cached?.build===build && Array.isArray(cached.rows) && cached.rows.length<=10000) { TITLE_INDEX.set(scope,cached); store.emit(); return; }
+            if(cached?.build===build && Array.isArray(cached.rows) && cached.rows.length<=10000) { TITLE_INDEX.set(scope,cached); L.emit(); return; }
           } catch {}
         }
         rows.push(...(value.data||[]).map(raw=>indexRow(raw,scope)).filter(Boolean));
@@ -111,9 +115,9 @@
         rows.forEach(s=>applyTitle(s,read));
         const entry={build,rows}; TITLE_INDEX.set(scope,entry);
         if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
-        store.emit(); return;
+        L.emit(); return; // `store` here was never defined: the throw skipped the repaint after every index read
       }
-    })().catch(e=>{if(e.status===403) clearTitleIndex();}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
+    })().then(()=>{TITLE_FAILED.delete(scope);},e=>{if(e.status===403) clearTitleIndex(); else TITLE_FAILED.set(scope,Date.now());}).finally(()=>{ if(TITLE_LOADING.get(scope)===task) TITLE_LOADING.delete(scope); });
     TITLE_LOADING.set(scope,task); return task;
   }
   /* Saved background results (Agent Service GET /wizard/background-results, wizard-agent-service #14).
@@ -1377,6 +1381,29 @@
   L.cachedMessages = id => {
     const c = keepable(id) && TC.get(id), s = L.session(id); if (!c || !s || !L.listTrusted()) return null;
     return String(c.rev || '').split('|').slice(0, 3).join('|') === ckOf(s) ? c.rows : null;
+  };
+  // Right after the phone comes back to the front the list can't vouch yet, and its read waits on everything else the
+  // resume fetches (3-5 s on James's phone, wizard-ux issue 2055). This one thread's detail read (~0.1 s) names the
+  // same message count and newest owner/reply times as its list row (Agent Service), so it can vouch for the stored
+  // copy of that thread alone: the copy when every part matches, else null (the skeleton stays; never an older reply).
+  const VERIFY = new Map();
+  L.verifiedCopy = id => {
+    if (!keepable(id)) return Promise.resolve(null);
+    if (VERIFY.has(id)) return VERIFY.get(id);
+    const p = (async () => {
+      await tcReady;
+      const c = TC.get(id); if (!c || !Array.isArray(c.rows) || !c.rows.length) return null;
+      const want = String(c.rev || '').split('|').slice(0, 3).join('|');
+      const raw = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail`)).json();
+      const s = normalize(raw?.session || raw);
+      // An older service names no reply times on this read: it can't vouch, so nothing paints early.
+      if (!s || s.id !== id || !Number.isSafeInteger(s.messageCount) || !(s.lastAssistantAt || s.lastUserAt)) return null;
+      // A list read that landed meanwhile is newer than this answer's question: when it names other messages, it wins.
+      const now = L.session(id);
+      if (L.listTrusted() && now && ckOf(now) !== want) return null;
+      return ckOf(s) === want && TC.get(id) === c ? c.rows : null;
+    })().catch(() => null).finally(() => { if (VERIFY.get(id) === p) VERIFY.delete(id); });
+    VERIFY.set(id, p); return p;
   };
   // No answer from Wizard at all (offline, plane wifi): the last copy this device kept, whatever its age. chats.js
   // shows it only after a read has failed, labelled as a saved copy, and the next good read replaces it.

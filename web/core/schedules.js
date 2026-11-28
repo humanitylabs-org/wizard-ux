@@ -183,8 +183,16 @@
     const f = el.closest('[data-sc-field]'), sh = state(ctx).sheet;
     if (f && sh?.type === 'edit' && Object.hasOwn(sh.draft, f.dataset.scField)) sh.draft[f.dataset.scField] = f.value;
   }
-  window.WosSchedules = { load, whenText, get available() { return !unavailable && (!!jobs || !!error); } };
+  // Whether this Wizard has schedules at all, for the Settings row: a read of the few Snooze returns only, not the
+  // whole list with every job's run history (5.4 MB on a busy box, on every page start; wizard-ux issue 2055).
+  // The list itself is read when Schedules opens (enter). An older service ignores ?kind: same answer as before.
+  let reachable = false;
+  async function probe() {
+    try { await request('?kind=return'); reachable = true; } catch (e) { if (e.status === 404) unavailable = true; else error = e.message; }
+    finally { changed(); }
+  }
+  window.WosSchedules = { load, whenText, get available() { return !unavailable && (!!jobs || !!error || reachable); } };
   window.WosSettings?.register({ id: 'schedules', page: 'schedules', aliases: ['schedules'], available: () => window.WosSchedules.available,
     html, act, input, back: close, enter: load, deferRefresh: ctx => !!state(ctx).sheet, leave(ctx) { state(ctx).sheet = null; state(ctx).error = ''; } });
-  load();
+  void probe();
 })();
