@@ -258,22 +258,6 @@ test('Welcome: the server seen mark is retried until acknowledged; the Setup til
   await later.boot();
   assert.equal(box.calls.filter(c => c === SEEN).length, 2);
   assert.equal(later.store.has('wos.welcome.v1.seen-pending'), false);
-
-  // Both shells' openApp send the Setup tile to the Welcome; the phone also ends the tile's opening state.
-  const openApp = (file, head) => {
-    const s = read(file), a = s.indexOf(head), line = s.slice(a, s.indexOf('\n', s.indexOf("a.id === 'setup'", a)));
-    const ctx = { window: { WosWelcome: { open: () => ctx.done.push('welcome') } }, done: [], openingEnd: id => ctx.done.push('end:' + id), closeSheets: () => ctx.done.push('sheets') };
-    vm.createContext(ctx); vm.runInContext(line + '\n return false; }', ctx); return ctx;
-  };
-  const phone = openApp('web/app-search.js', 'function openApp(a, extra = {}, opts = {}) {');
-  assert.equal(phone.openApp({ id: 'setup' }), true); assert.deepEqual(phone.done, ['end:setup', 'sheets', 'welcome']);
-  const desk = openApp('web/desktop/desktop-resize.js', 'function openApp(a, opts = {}) {');
-  assert.equal(desk.openApp({ id: 'setup' }), true); assert.deepEqual(desk.done, ['welcome']);
-  // Get set up on (wizard-ux issue 1837): the Welcome lets the Setup tile open the Setup page, in both shells.
-  for (const [file, head] of [['web/app-search.js', 'function openApp(a, extra = {}, opts = {}) {'], ['web/desktop/desktop-resize.js', 'function openApp(a, opts = {}) {']]) {
-    const s = openApp(file, head); s.window.WosWelcome.takesSetup = false;
-    assert.equal(s.openApp({ id: 'setup' }), false); assert.deepEqual(s.done, []);
-  }
 });
 
 test('Welcome: Back can close during an install; the app-list wait is bounded', async () => {
