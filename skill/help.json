@@ -369,6 +369,10 @@
       "help": "Android app: the side button opens Messenger's Agent chat for a note instead of a new Wizard chat.",
       "where": "Settings › Appearance › Try new features › Side button opens the Agent chat"
     },
+    "wizard/feature-counts-privacy": {
+      "help": "Share feature counts moves to Settings › Privacy.",
+      "where": "Settings › Appearance › Try new features › Share feature counts in Privacy"
+    },
     "wizard/catch-up-sent": {
       "help": "Catch me up clears finished Sent chats, any age.",
       "where": "Settings › Appearance › Try new features › Catch me up clears Sent"

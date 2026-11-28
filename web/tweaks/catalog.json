@@ -31,7 +31,8 @@
     "wizard/smart-inbox",
     "wizard/phone-recovery-mode",
     "wizard/auto-tags",
-    "wizard/catch-up-sent"
+    "wizard/catch-up-sent",
+    "wizard/feature-counts-privacy"
   ],
   "defaults": [],
   "promotedDefaults": [],
