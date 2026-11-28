@@ -52,6 +52,26 @@ final class ReachPolicy {
         return why == Why.NOT_ANSWERING && !offlineShowing && sinceLoadMs >= 0 && sinceLoadMs < GIVE_UP_MS;
     }
 
+    /** Wizard-ux issue 2054: a page already painted, nothing on the connection screen, and Tailscale goes off (or is
+     *  off when the owner comes back). No page load is under way, so none of the marks above ever run: the app checks
+     *  for itself on a network change, a return to the app and a paint. Only with a network, a Tailscale address and
+     *  no VPN; Tailscale on never asks (wizard-ux issue 2008). */
+    static boolean checkUnderPage(boolean painted, boolean showing, boolean network, boolean vpn, boolean needsTailscale) {
+        return painted && !showing && why(network, vpn, needsTailscale) == Why.TAILSCALE_OFF;
+    }
+
+    /** Wizard-ux issue 2054: the box's own health check didn't answer and Tailscale is still off: the guide shows at
+     *  once. A box that answers anyway (Tailscale Funnel, another route) keeps the page as it is. */
+    static boolean tailscaleOffUnderPage(int health, Why now) {
+        return now == Why.TAILSCALE_OFF && !(health >= 200 && health < 500);
+    }
+
+    /** Wizard-ux issue 2054: a page painted while the Tailscale guide is up and Tailscale is still off (the shell from
+     *  its cache on a retry): the guide stays, so it doesn't leave and come back on every retry. */
+    static boolean keepOnPaint(boolean offline, Why shown, Why now) {
+        return offline && shown == Why.TAILSCALE_OFF && now == Why.TAILSCALE_OFF;
+    }
+
     /** The wait before quiet try number `tries` (0 first). */
     static long quietRetryDelay(int tries) {
         return QUIET_RETRY_MS[Math.max(0, Math.min(tries, QUIET_RETRY_MS.length - 1))];
