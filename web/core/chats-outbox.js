@@ -189,6 +189,18 @@ window.WizCore.chatsParts.outbox = function ({ ch, CH, CHECK_SVG, elOf, esc, H, 
           Object.assign(c, { turns: toTurns(cached), cachedFor: sid, cachedNav: nav, loadedFor: '', err: '' });
           const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
         } catch (e) {}
+      } else if (LIVE.verifiedCopy && !LIVE.listTrusted?.() && !(c.verifyFor === sid && c.verifyNav === nav)) {
+        // The list can't vouch yet (the phone just came back to the front): this thread's own detail read can, in
+        // ~0.1 s, so its saved copy paints long before the list or the history read lands (wizard-ux issue 2055).
+        // Once per open: every repaint calls loadThread, and a copy the detail contradicts stays unpainted.
+        Object.assign(c, { verifyFor: sid, verifyNav: nav });
+        void LIVE.verifiedCopy(sid).then(rows => {
+          if (!rows || !rows.length || CH[w.id] !== c || W[w.id] !== w || w.thread !== sid || c.readNav !== nav || (c.loadedFor === sid && c.loadedNav === nav) || (c.cachedFor === sid && c.cachedNav === nav)) return;
+          try {
+            Object.assign(c, { turns: toTurns(rows), cachedFor: sid, cachedNav: nav, loadedFor: '', err: '' });
+            const el = track.querySelector(`[data-chats="${w.id}"]`); if (el) renderLive(w, el);
+          } catch (e) {}
+        });
       }
     }
     if (fresh && !force) {
