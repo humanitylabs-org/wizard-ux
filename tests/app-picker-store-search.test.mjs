@@ -1,19 +1,14 @@
-// Add an app also searches the App Store (wizard-os issue 721, switch wizard/app-picker-store-search, off by default).
-// The real AI apps desktop view: its Apps column's + opens the shared picker (layouts/apps/chrome.js). Switch on: typing
-// a name lists the App Store's matches you don't have yet under your installed ones, and a pick opens its Store page.
-// Switch off: the picker never reads the Store and shows installed apps only, as before.
+// Add an app also searches the App Store (wizard-os issue 721, on for everyone: the switch is gone).
+// The real AI apps desktop view: its Apps column's + opens the shared picker (layouts/apps/chrome.js). Typing a name
+// lists the App Store's matches you don't have yet under your installed ones, and a pick opens its Store page.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FakePointerEvent, deskWorld, layout, settle } from './fixtures/ai-apps-world.mjs';
 
-const ID = 'wizard/app-picker-store-search';
 const STORE = [{ id: 'wizard-atlas', name: 'Atlas', summary: 'World maps and directions' }, { id: 'wizard-podcasts', name: 'Podcasts', summary: 'Listen to your shows' }, { id: 'money-copy', name: 'Money', summary: 'Already installed under another id' }];
 
-async function picker(on, { fail = false } = {}) {
+async function picker({ fail = false } = {}) {
   const { w } = deskWorld();
-  const html = globalThis.document?.documentElement || w.html;
-  if (on) html.dataset.tweaks = ID; else delete html.dataset.tweaks;
-  w.html.dataset.tweaks = on ? ID : '';
   const reads = [], got = [];
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'maps-notes', name: 'Map notes' }] });
   w.api.apps.openAny = id => { w.st.opened.push('any:' + id); return true; };
@@ -28,18 +23,8 @@ async function picker(on, { fail = false } = {}) {
   return { w, reads, got, type, heads, storeRows };
 }
 
-test('switch off: the picker never reads the App Store and a search shows installed apps only', async () => {
-  const p = await picker(false);
-  assert.equal(p.reads.length, 0, 'no Store read');
-  await p.type('map');
-  assert.deepEqual(p.heads(), ['For people']);
-  assert.deepEqual(p.storeRows(), [], 'no App Store rows');
-  assert.deepEqual(p.w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['maps-notes']);
-  assert.equal(p.w.q('.vc-pick .vc-store-wait'), null);
-});
-
-test('switch on: a search lists App Store matches you do not have, under the installed ones; a pick opens its Store page', async () => {
-  const p = await picker(true);
+test('a search lists App Store matches you do not have, under the installed ones; a pick opens its Store page', async () => {
+  const p = await picker();
   assert.equal(p.reads.length, 1, 'the Store list is read once when the picker opens');
   assert.deepEqual(p.storeRows(), [], 'nothing from the Store before typing');
   assert.deepEqual(p.heads(), ['For people']);
@@ -56,8 +41,8 @@ test('switch on: a search lists App Store matches you do not have, under the ins
   assert.equal(p.w.q('.vc-pick'), null, 'the picker closed');
 });
 
-test('switch on: the Store unreachable says so while searching; the installed list still works', async () => {
-  const p = await picker(true, { fail: true });
+test('the Store unreachable says so while searching; the installed list still works', async () => {
+  const p = await picker({ fail: true });
   await p.type('map');
   assert.deepEqual(p.storeRows(), []);
   assert.equal(p.w.q('.vc-pick .vc-store-wait')?.textContent, 'The App Store can’t be reached right now.');
